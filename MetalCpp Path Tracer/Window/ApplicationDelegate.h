@@ -15,6 +15,7 @@ class ApplicationDelegate : public NS::ApplicationDelegate
 {
     public:
         ~ApplicationDelegate();
+        ApplicationDelegate() = default;
 
         virtual void applicationWillFinishLaunching( NS::Notification* pNotification ) override;
         virtual void applicationDidFinishLaunching( NS::Notification* pNotification ) override;
@@ -25,6 +26,7 @@ class ApplicationDelegate : public NS::ApplicationDelegate
         MTK::View* _pMtkView;
         MTL::Device* _pDevice;
         ViewDelegate* _pViewDelegate = nullptr;
+        bool _initialized = false;
 };
 
 };
