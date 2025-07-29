@@ -1,0 +1,20 @@
+<Scene>
+    <!-- Ground -->
+    <Sphere position="0,-10000,0" radius="10000" albedo="0.8,0.8,0.8" emission="0,0,0" materialType="0" emissionPower="10" />
+
+    <!-- Large floating sphere -->
+    <Sphere position="0,100,-100" radius="40" albedo="0.8,0.8,0.8" emission="0,0,0" materialType="0" emissionPower="10" />
+
+    <!-- Small sphere that emits light -->
+    <Sphere position="0,20,-100" radius="10" albedo="0.0,0.0,0.0" emission="1.0,0.9,0.7" materialType="0" emissionPower="20" />
+
+    <!-- Bunny Mesh beside the light sphere -->
+    <Mesh
+        file="/Users/apollo/Downloads/MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path Tracer/assets/bunny.obj"
+        position="-25,0,-100"
+        scale="10.0"
+        albedo="0.9,0.5,0.3"
+        emission="0,0,0"
+        materialType="0"
+        emissionPower="0" />
+</Scene>
