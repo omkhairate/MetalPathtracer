@@ -259,6 +259,7 @@ void Renderer::updateUniforms()
     }
 
     u.primitiveCount = _pScene->getPrimitiveCount();
+    u.triangleCount = _pScene->getTriangleCount();
 
 
     _pUniformsBuffer->didModifyRange(NS::Range::Make(0, sizeof(UniformsData)));

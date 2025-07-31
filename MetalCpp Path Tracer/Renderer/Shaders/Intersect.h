@@ -7,7 +7,7 @@ using namespace metal;
 #include "Structs.h"
 
 // Sphere intersection (your original function)
-inline float sphereIntersection(thread const ray &ray, device const float4 &sphere)
+inline float sphereIntersection(thread const ray &ray, thread const float4 &sphere)
 {
     const float3 sphereCenter = sphere.xyz;
     const float r = sphere.w;
@@ -15,11 +15,12 @@ inline float sphereIntersection(thread const ray &ray, device const float4 &sphe
     float3 originToCenter = sphereCenter - ray.origin;
     float a = length_squared(ray.direction);
     float h = dot(ray.direction, originToCenter);
-    float c = length_squared(originToCenter) - r*r;
+    float c = length_squared(originToCenter) - r * r;
 
-    float discriminant = h*h - a*c;
+    float discriminant = h * h - a * c;
 
-    if (discriminant < 0) return INFINITY;
+    if (discriminant < 0)
+        return INFINITY;
 
     float sqrtDiscriminant = sqrt(discriminant);
 
