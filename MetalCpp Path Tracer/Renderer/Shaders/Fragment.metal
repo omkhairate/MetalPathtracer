@@ -47,13 +47,15 @@ float4 fragment fragmentMain(
 
     
 
-    float4 color = rayColorBVH(
+    float4 color = rayColor(
         r,
         bvhNodes,
         primitives,       // <- Each primitive is 3 float4s
         materials,
         u.primitiveCount,
-        u.triangleCount,
+        nullptr,
+        nullptr,
+        0,
         seed
     );
 
