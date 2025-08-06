@@ -15,8 +15,8 @@ struct intersection
     float3 point;
     float3 normal;
     bool frontFace;
-    int sphereId = -1;
-    int triangleId = -1;
+    int primitiveId = -1;
+    int isTriangle = 0;
 };
 
 
