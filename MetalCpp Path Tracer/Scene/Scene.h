@@ -87,6 +87,9 @@ public:
                        p.data0.x, p.data0.y, p.data0.z, p.data1.x);
             }
         }
+        
+        
+
     }
 
     size_t getBVHNodeCount() const {

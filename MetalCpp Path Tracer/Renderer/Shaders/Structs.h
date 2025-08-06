@@ -22,6 +22,7 @@ struct intersection
 
 struct UniformsData
 {
+    int primitiveIndex;
     simd::float3 cameraPosition;
     simd::float2 screenSize;
 
@@ -35,6 +36,7 @@ struct UniformsData
     uint64_t triangleCount;
     uint64_t frameCount = 0;
     uint64_t totalPrimitiveCount;
+
 
 };
 

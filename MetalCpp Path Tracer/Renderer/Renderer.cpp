@@ -11,6 +11,7 @@ using namespace MetalCppPathTracer;
 
 struct UniformsData
 {
+    int primitiveIndex;
     simd::float3 cameraPosition;
     simd::float2 screenSize;
 
