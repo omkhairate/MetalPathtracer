@@ -95,13 +95,14 @@ inline intersection firstHitBVH(
         float3 bmin = bvhNodes[2 * nodeIdx + 0].xyz;
         float3 bmax = bvhNodes[2 * nodeIdx + 1].xyz;
         int leftFirst = as_type<int>(bvhNodes[2 * nodeIdx + 0].w);
-        int count = as_type<int>(bvhNodes[2 * nodeIdx + 1].w);
+        int second = as_type<int>(bvhNodes[2 * nodeIdx + 1].w);
 
         if (!intersectAABB(r, bmin, bmax, 0.0001, in.t))
             continue;
 
-        if (count > 0)
+        if (second > 0)
         {
+            int count = second;
             for (int i = 0; i < count; ++i)
             {
                 int primIdx = primitiveIndices[leftFirst + i];
@@ -186,8 +187,9 @@ inline intersection firstHitBVH(
         }
         else
         {
+            int rightChild = -second;
             stack[stackPtr++] = leftFirst;
-            stack[stackPtr++] = leftFirst + 1;
+            stack[stackPtr++] = rightChild;
         }
     }
 

@@ -26,7 +26,7 @@ struct BVHNode {
     simd::float3 boundsMin;
     simd::float3 boundsMax;
     int leftFirst;
-    int count;
+    int count; // >0: number of primitives (leaf). <=0: -right child index (internal)
 };
 
 class Scene {
@@ -311,7 +311,7 @@ private:
         int rightChild = buildBVHRecursive(bestSplit, end);
 
         bvhNodes[nodeIndex].leftFirst = leftChild;
-        bvhNodes[nodeIndex].count = 0;
+        bvhNodes[nodeIndex].count = -rightChild;
 
         return nodeIndex;
     }
