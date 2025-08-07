@@ -55,3 +55,6 @@ bool ApplicationDelegate::applicationShouldTerminateAfterLastWindowClosed(NS::Ap
 {
     return true;
 }
+
+
+//hehehehe
