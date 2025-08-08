@@ -5,7 +5,9 @@
 #include "Scene.h"
 #include "SceneLoader.h"
 #include <cstdio>
+#include <fstream>
 #include <simd/simd.h>
+#include <cmath>
 
 using namespace MetalCppPathTracer;
 
@@ -39,7 +41,8 @@ inline float randomFloat() {
 }
 
 Renderer::Renderer(MTL::Device *pDevice)
-    : _pDevice(pDevice->retain()), _pScene(new Scene()) {
+    : _pDevice(pDevice->retain()), _fullScene(new Scene()),
+      _pScene(new Scene()) {
   _pCommandQueue = _pDevice->newCommandQueue();
 
   Camera::reset();
@@ -47,9 +50,7 @@ Renderer::Renderer(MTL::Device *pDevice)
 
   updateVisibleScene();
   buildShaders();
-  buildBuffers();
   buildTextures();
-
   recalculateViewport();
 }
 
@@ -82,6 +83,7 @@ Renderer::~Renderer() {
   if (_pDevice)
     _pDevice->release();
 
+  delete _fullScene;
   delete _pScene;
 }
 
@@ -121,63 +123,20 @@ void Renderer::buildShaders() {
 }
 
 void Renderer::updateVisibleScene() {
-  SceneLoader::LoadSceneFromXML(
-      "/Users/apollo/Downloads/"
-      "MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path "
-      "Tracer/scene.xml",
-      _pScene);
+  if (_fullScene->getPrimitiveCount() == 0) {
+    SceneLoader::LoadSceneFromXML(
+        "/Users/apollo/Downloads/",
+        "MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path "
+        "Tracer/scene.xml",
+        _fullScene);
 
-  printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles)\n",
-         _pScene->getPrimitiveCount(),
-         _pScene->getPrimitiveCount() - _pScene->getTriangleCount(),
-         _pScene->getTriangleCount());
-
-  _pScene->buildBVH();
-
-  // Report separate BLAS and TLAS node counts
-  size_t blasNodeCount = _pScene->getBVHNodeCount();
-  _blasNodeCount = blasNodeCount;
-  printf("BLAS node count: %zu\n", _blasNodeCount);
-
-  // BVH node buffer
-  simd::float4 *bvhData = _pScene->createBVHBuffer();
-  if (_pBVHBuffer)
-    _pBVHBuffer->release();
-  _pBVHBuffer = _pDevice->newBuffer(
-      bvhData, sizeof(simd::float4) * _pScene->getBVHNodeCount() * 2,
-      MTL::ResourceStorageModeManaged);
-  _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
-  delete[] bvhData; // optional if `createBVHBuffer` allocates on heap
-
-  // Build TLAS buffer from root children
-  size_t tlasCount = 0;
-  simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
-  _tlasNodeCount = tlasCount;
-  printf("TLAS node count: %zu\n", _tlasNodeCount);
-  if (_pTLASBuffer)
-    _pTLASBuffer->release();
-  if (tlasData && tlasCount > 0) {
-    _pTLASBuffer =
-        _pDevice->newBuffer(tlasData, sizeof(simd::float4) * tlasCount * 2,
-                            MTL::ResourceStorageModeManaged);
-    _pTLASBuffer->didModifyRange(NS::Range::Make(0, _pTLASBuffer->length()));
-  } else {
-    _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
+    printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles)\n",
+           _fullScene->getPrimitiveCount(),
+           _fullScene->getPrimitiveCount() - _fullScene->getTriangleCount(),
+           _fullScene->getTriangleCount());
   }
-  delete[] tlasData;
 
-  // 🆕 Primitive index buffer (for BVH leaf traversal)
-  int *rawIndices = _pScene->createPrimitiveIndexBuffer();
-  if (_pPrimitiveIndexBuffer)
-    _pPrimitiveIndexBuffer->release();
-  _pPrimitiveIndexBuffer = _pDevice->newBuffer(
-      rawIndices, sizeof(int) * _pScene->getPrimitiveCount(),
-      MTL::ResourceStorageModeManaged);
-  _pPrimitiveIndexBuffer->didModifyRange(
-      NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
-  delete[] rawIndices;
-
-  buildBuffers();
+  rebuildAccelerationStructures();
 }
 
 void Renderer::recalculateViewport() {
@@ -360,6 +319,39 @@ void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
 }
 
 void Renderer::rebuildAccelerationStructures() {
+  // Cull primitives against the camera frustum
+  _pScene->clear();
+  size_t culled = 0;
+
+  float aspect = Camera::screenSize.x / Camera::screenSize.y;
+  float tanHalfV = tanf(Camera::verticalFov * (M_PI / 180.0f) * 0.5f);
+  float tanHalfH = tanHalfV * aspect;
+  simd::float3 right = simd::normalize(simd::cross(Camera::forward, Camera::up));
+  simd::float3 up = simd::cross(right, Camera::forward);
+
+  for (const auto &p : _fullScene->getPrimitives()) {
+    simd::float3 center; float radius;
+    if (p.type == PrimitiveType::Sphere) {
+      center = p.data0;
+      radius = p.data1.x;
+    } else {
+      simd::float3 bmin = simd::min(p.data0, simd::min(p.data1, p.data2));
+      simd::float3 bmax = simd::max(p.data0, simd::max(p.data1, p.data2));
+      center = (bmin + bmax) * 0.5f;
+      radius = simd::length(bmax - center);
+    }
+    simd::float3 toC = center - Camera::position;
+    float z = simd::dot(toC, Camera::forward);
+    if (z < -radius) { culled++; continue; }
+    float x = simd::dot(toC, right);
+    float y = simd::dot(toC, up);
+    if (fabsf(x) > z * tanHalfH + radius) { culled++; continue; }
+    if (fabsf(y) > z * tanHalfV + radius) { culled++; continue; }
+    _pScene->addPrimitive(p);
+  }
+
+  printf("Culled %zu primitives (%zu visible)\n", culled, _pScene->getPrimitiveCount());
+
   _pScene->buildBVH();
 
   size_t newBlasCount = _pScene->getBVHNodeCount();
@@ -406,4 +398,50 @@ void Renderer::rebuildAccelerationStructures() {
   _pPrimitiveIndexBuffer->didModifyRange(
       NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
   delete[] rawIndices;
+
+  // Rebuild geometry buffers for visible primitives
+  buildBuffers();
+}
+
+void Renderer::exportAccelerationStructures(const char *blasPath,
+                                             const char *tlasPath) {
+  auto writeBoxes = [](const char *path, simd::float4 *data, size_t count) {
+    if (!path || !data || count == 0)
+      return;
+    std::ofstream out(path);
+    if (!out.is_open()) {
+      printf("Failed to open %s for writing\n", path);
+      return;
+    }
+    size_t v = 1;
+    for (size_t i = 0; i < count; ++i) {
+      simd::float3 bmin = {data[2 * i + 0].x, data[2 * i + 0].y, data[2 * i + 0].z};
+      simd::float3 bmax = {data[2 * i + 1].x, data[2 * i + 1].y, data[2 * i + 1].z};
+      out << "v " << bmin.x << ' ' << bmin.y << ' ' << bmin.z << "\n";
+      out << "v " << bmax.x << ' ' << bmin.y << ' ' << bmin.z << "\n";
+      out << "v " << bmax.x << ' ' << bmax.y << ' ' << bmin.z << "\n";
+      out << "v " << bmin.x << ' ' << bmax.y << ' ' << bmin.z << "\n";
+      out << "v " << bmin.x << ' ' << bmin.y << ' ' << bmax.z << "\n";
+      out << "v " << bmax.x << ' ' << bmin.y << ' ' << bmax.z << "\n";
+      out << "v " << bmax.x << ' ' << bmax.y << ' ' << bmax.z << "\n";
+      out << "v " << bmin.x << ' ' << bmax.y << ' ' << bmax.z << "\n";
+      out << "f " << v << " " << v+1 << " " << v+2 << " " << v+3 << "\n";
+      out << "f " << v+4 << " " << v+5 << " " << v+6 << " " << v+7 << "\n";
+      out << "f " << v << " " << v+1 << " " << v+5 << " " << v+4 << "\n";
+      out << "f " << v+1 << " " << v+2 << " " << v+6 << " " << v+5 << "\n";
+      out << "f " << v+2 << " " << v+3 << " " << v+7 << " " << v+6 << "\n";
+      out << "f " << v+3 << " " << v << " " << v+4 << " " << v+7 << "\n";
+      v += 8;
+    }
+  };
+
+  size_t blasCount = _pScene->getBVHNodeCount();
+  simd::float4 *blasData = _pScene->createBVHBuffer();
+  writeBoxes(blasPath, blasData, blasCount);
+  delete[] blasData;
+
+  size_t tlasCount = 0;
+  simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
+  writeBoxes(tlasPath, tlasData, tlasCount);
+  delete[] tlasData;
 }

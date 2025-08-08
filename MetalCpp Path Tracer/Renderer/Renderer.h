@@ -22,9 +22,11 @@ public:
   void recalculateViewport();
   bool updateCamera();
 
-  void updateUniforms();
-  void draw(MTK::View *pView);
-  void drawableSizeWillChange(MTK::View *pView, CGSize size);
+    void updateUniforms();
+    void draw(MTK::View *pView);
+    void drawableSizeWillChange(MTK::View *pView, CGSize size);
+    void exportAccelerationStructures(const char *blasPath,
+                                      const char *tlasPath);
 
   std::vector<std::pair<simd::float3, float>> _allSpheres;
 
@@ -39,8 +41,9 @@ private:
   MTL::CommandQueue *_pCommandQueue = nullptr;
   MTL::RenderPipelineState *_pPSO = nullptr;
 
-  // Core scene and geometry data
-  Scene *_pScene = nullptr;
+    // Core scene and geometry data
+    Scene *_fullScene = nullptr;   // persistent scene storage
+    Scene *_pScene = nullptr;      // currently visible subset
 
   // Buffers
   MTL::Buffer *_pSphereBuffer = nullptr;
