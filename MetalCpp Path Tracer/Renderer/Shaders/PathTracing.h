@@ -66,6 +66,7 @@ inline intersection firstHitBVH(thread const ray &r,
   in.t = INFINITY;
   in.primitiveId = -1;
   in.isTriangle = 0;
+  in.nodeIndex = -1;
 
   constexpr int stackSize = 64;
   int stack[stackSize];
@@ -174,6 +175,7 @@ inline intersection firstHitBVH(thread const ray &r,
           in.normal = n;
           in.point = hit;
           in.isTriangle = primitiveType;
+          in.nodeIndex = nodeIdx;
         }
       }
     } else {
@@ -197,7 +199,42 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
                        device const float4 *primitives,
                        device const float4 *materials, uint primitiveCount,
                        device const int *primitiveIndices,
-                       thread uint32_t &seed, uint maxRayDepth) {
+                       thread uint32_t &seed, uint maxRayDepth,
+                       uint debugAS, uint blasNodeCount) {
+  if (debugAS == 1) {
+    for (uint i = 0; i < tlasNodeCount; ++i) {
+      float3 bmin = tlasNodes[2 * i + 0].xyz;
+      float3 bmax = tlasNodes[2 * i + 1].xyz;
+      if (intersectAABB(r, bmin, bmax, 0.0001, INFINITY)) {
+        float t = (tlasNodeCount > 1) ? float(i) / float(tlasNodeCount - 1) : 0.0;
+        return float4(t, 1.0 - t, 0.0, 1.0);
+      }
+    }
+    return float4(0.0, 0.0, 0.0, 1.0);
+  } else if (debugAS == 2) {
+    intersection bestHit;
+    bestHit.t = INFINITY;
+    bestHit.primitiveId = -1;
+    for (uint i = 0; i < tlasNodeCount; ++i) {
+      float3 bmin = tlasNodes[2 * i + 0].xyz;
+      float3 bmax = tlasNodes[2 * i + 1].xyz;
+      int startNode = as_type<int>(tlasNodes[2 * i + 0].w);
+      if (!intersectAABB(r, bmin, bmax, 0.0001, bestHit.t))
+        continue;
+      intersection hit =
+          firstHitBVH(r, bvhNodes, primitives, primitiveIndices, startNode);
+      if (hit.primitiveId != -1 && hit.t < bestHit.t)
+        bestHit = hit;
+    }
+    if (bestHit.primitiveId != -1) {
+      float t = (blasNodeCount > 1)
+                    ? float(bestHit.nodeIndex) / float(blasNodeCount - 1)
+                    : 0.0;
+      return float4(t, 0.0, 1.0 - t, 1.0);
+    }
+    return float4(0.0, 0.0, 0.0, 1.0);
+  }
+
   float4 absorption = float4(1.0);
   float4 light = float4(0.0);
 
@@ -248,7 +285,6 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
     seed = random(seed);
     absorption *= float4(albedo, 1.0);
 
-    // Russian roulette termination to avoid tracing very long ray paths
     if (depth >= 5) {
       float p = max(absorption.x, max(absorption.y, absorption.z));
       float randVal = randomFloat(seed);

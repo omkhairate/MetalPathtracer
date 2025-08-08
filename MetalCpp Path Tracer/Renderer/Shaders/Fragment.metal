@@ -58,7 +58,9 @@ float4 fragment fragmentMain(
         u.primitiveCount,
         primitiveIndices,
         seed,
-        u.maxRayDepth
+        u.maxRayDepth,
+        u.debugAS,
+        u.blasNodeCount
     );
 
 

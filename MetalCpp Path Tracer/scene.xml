@@ -8,8 +8,8 @@
     <!-- Small sphere that emits light -->
     <Sphere position="0,20,-100" radius="10" albedo="0.0,0.0,0.0" emission="1.0,0.9,0.7" materialType="0" emissionPower="5" />
     
-    <!-- Mirror beside the bunny -->
-    <Rectangle position="25,10,-100" u="0,10,0" v="0,0,10" albedo="1.0,1.0,1.0" emission="0,0,0" materialType="-1" emissionPower="0" />
+    <!-- Mirror behind the bunny, facing the camera -->
+    <Rectangle position="15,10,-120" u="10,0,0" v="0,10,0" albedo="1.0,1.0,1.0" emission="0,0,0" materialType="-1" emissionPower="0" />
 
     <!-- Bunny Mesh beside the mirror -->
     <Mesh

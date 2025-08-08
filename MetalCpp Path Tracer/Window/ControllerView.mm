@@ -46,14 +46,21 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
 - (void)keyDown:(NSEvent *)event {
     if(event.keyCode == 2) MetalCppPathTracer::InputSystem::movementInput.x = 1; // right - d
     else if(event.keyCode == 0) MetalCppPathTracer::InputSystem::movementInput.x = -1; // left - a
-    
+
     if(event.keyCode == 49) MetalCppPathTracer::InputSystem::movementInput.y = 1; // up - space
     else if(event.keyCode == 8) MetalCppPathTracer::InputSystem::movementInput.y = -1; // down - c
-    
+
     if(event.keyCode == 13) MetalCppPathTracer::InputSystem::movementInput.z = 1; // forward - w
     else if(event.keyCode == 1) MetalCppPathTracer::InputSystem::movementInput.z = -1; // backward - s
-    
+
     if(event.keyCode == 15) MetalCppPathTracer::InputSystem::resetInput = 1;
+
+    if(event.keyCode == 17) { // t - toggle TLAS debug
+        MetalCppPathTracer::InputSystem::debugAS = (MetalCppPathTracer::InputSystem::debugAS == 1) ? 0 : 1;
+    }
+    if(event.keyCode == 11) { // b - toggle BLAS debug
+        MetalCppPathTracer::InputSystem::debugAS = (MetalCppPathTracer::InputSystem::debugAS == 2) ? 0 : 2;
+    }
 }
 
 - (void)keyUp:(NSEvent *)event {

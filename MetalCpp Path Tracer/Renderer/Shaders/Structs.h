@@ -17,6 +17,7 @@ struct intersection
     bool frontFace;
     int primitiveId = -1;
     int isTriangle = 0;
+    int nodeIndex = -1; // BLAS leaf node index
 };
 
 
@@ -37,8 +38,9 @@ struct UniformsData
     uint64_t frameCount = 0;
     uint64_t totalPrimitiveCount;
     uint64_t tlasNodeCount;
+    uint64_t blasNodeCount;
     uint maxRayDepth;
-    uint _pad;
+    uint debugAS;
 };
 
 
