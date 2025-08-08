@@ -61,7 +61,14 @@ bool Renderer::isInView(const BoundingSphere &b) {
 }
 
 void Renderer::syncSceneWithActivePrimitives() {
+  // Preserve camera path and settings while refreshing primitive list
+  auto cameraPath = _pScene->cameraPath;
+  auto size = _pScene->screenSize;
+  auto depth = _pScene->maxRayDepth;
   _pScene->clear();
+  _pScene->cameraPath = cameraPath;
+  _pScene->screenSize = size;
+  _pScene->maxRayDepth = depth;
   _activeToGlobalIndex.clear();
   for (size_t i = 0; i < _allPrimitives.size(); ++i) {
     if (_activePrimitive[i]) {
@@ -508,4 +515,8 @@ void Renderer::rebuildAccelerationStructures() {
   _pPrimitiveIndexBuffer->didModifyRange(
       NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
   delete[] rawIndices;
+
+  // Export acceleration structures for visualization
+  _pScene->exportBVHAsOBJ("blas.obj");
+  _pScene->exportTLASAsOBJ("tlas.obj");
 }
