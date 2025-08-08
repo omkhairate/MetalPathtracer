@@ -122,18 +122,15 @@ void Renderer::buildShaders() {
 }
 
 void Renderer::updateVisibleScene() {
-  SceneLoader::LoadSceneFromXML(
-      "/Users/apollo/Downloads/"
-      "MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path "
-      "Tracer/scene.xml",
-      _pScene);
+  SceneLoader::LoadSceneFromXML("scene.xml", _pScene);
 
   Camera::screenSize = _pScene->screenSize;
 
-  printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles)\n",
+  printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles, %zu rectangles)\n",
          _pScene->getPrimitiveCount(),
-         _pScene->getPrimitiveCount() - _pScene->getTriangleCount(),
-         _pScene->getTriangleCount());
+         _pScene->getSphereCount(),
+         _pScene->getTriangleCount(),
+         _pScene->getRectangleCount());
 
   _pScene->buildBVH();
 

@@ -82,6 +82,35 @@ inline bool triangleIntersection(
     return true;
 }
 
+// Rectangle intersection
+inline bool rectangleIntersection(
+    thread const ray &ray,
+    float3 center,
+    float3 e1,
+    float3 e2,
+    thread float &tHit,
+    thread float3 &normal)
+{
+    normal = normalize(cross(e1, e2));
+    float denom = dot(normal, ray.direction);
+    if (fabs(denom) < 1e-6)
+        return false;
+
+    float t = dot(center - ray.origin, normal) / denom;
+    if (t < ray.min_distance || t > ray.max_distance)
+        return false;
+
+    float3 pHit = ray.origin + t * ray.direction;
+    float3 rel = pHit - center;
+    float u = dot(rel, e1) / dot(e1, e1);
+    float v = dot(rel, e2) / dot(e2, e2);
+    if (fabs(u) > 1.0 || fabs(v) > 1.0)
+        return false;
+
+    tHit = t;
+    return true;
+}
+
 #endif
 
 
