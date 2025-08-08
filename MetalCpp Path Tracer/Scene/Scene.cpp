@@ -209,8 +209,14 @@ static void writeBoxOBJ(std::ofstream &out, const simd::float3 &bmin,
     for (int i = 0; i < 8; ++i)
         out << "v " << v[i].x << " " << v[i].y << " " << v[i].z << "\n";
 
-    // Export edges so that visualization tools show a wireframe similar to the
-    // renderer's debug view instead of solid faces that can occlude geometry.
+    // Export faces so that generic OBJ viewers can display the boxes.
+    int faces[6][4] = {{0, 1, 2, 3}, {4, 5, 6, 7}, {0, 1, 5, 4},
+                       {1, 2, 6, 5}, {2, 3, 7, 6}, {3, 0, 4, 7}};
+    for (const auto &f : faces)
+        out << "f " << idx + f[0] << " " << idx + f[1] << " " << idx + f[2]
+            << " " << idx + f[3] << "\n";
+
+    // Also export edges for a wireframe-style visualization.
     int edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
                         {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
     for (const auto &e : edges)
