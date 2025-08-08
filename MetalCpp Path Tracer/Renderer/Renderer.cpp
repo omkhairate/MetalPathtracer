@@ -347,6 +347,8 @@ bool Renderer::updateCamera() {
     recalculateViewport();
     rebuildAccelerationStructures();
   }
+  // Advance animation frame after processing camera path
+  _animationFrame++;
   return changed;
 }
 
@@ -446,7 +448,6 @@ void Renderer::draw(MTK::View *pView) {
   }
 
   pPool->release();
-  _animationFrame++;
 }
 
 void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
