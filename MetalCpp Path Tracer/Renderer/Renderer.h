@@ -7,54 +7,55 @@
 
 #include "Scene.h"
 
-namespace MetalCppPathTracer
-{
+namespace MetalCppPathTracer {
 
-class Renderer
-{
+class Renderer {
 public:
-    Renderer(MTL::Device* pDevice);
-    ~Renderer();
+  Renderer(MTL::Device *pDevice);
+  ~Renderer();
 
-    void updateVisibleScene();
-    void buildShaders();
-    void buildBuffers();
-    void buildTextures();
+  void updateVisibleScene();
+  void buildShaders();
+  void buildBuffers();
+  void buildTextures();
 
-    void recalculateViewport();
-    bool updateCamera();
+  void recalculateViewport();
+  bool updateCamera();
 
-    void updateUniforms();
-    void draw(MTK::View* pView);
-    void drawableSizeWillChange(MTK::View* pView, CGSize size);
+  void updateUniforms();
+  void draw(MTK::View *pView);
+  void drawableSizeWillChange(MTK::View *pView, CGSize size);
 
-    std::vector<std::pair<simd::float3, float>> _allSpheres;
+  std::vector<std::pair<simd::float3, float>> _allSpheres;
 
-    struct Chunk {
-        std::vector<std::pair<simd::float4, simd::float4>> spheres; // (transform, material)
-        simd::int3 chunkCoords;
-    };
+  struct Chunk {
+    std::vector<std::pair<simd::float4, simd::float4>>
+        spheres; // (transform, material)
+    simd::int3 chunkCoords;
+  };
 
 private:
-    MTL::Device* _pDevice = nullptr;
-    MTL::CommandQueue* _pCommandQueue = nullptr;
-    MTL::RenderPipelineState* _pPSO = nullptr;
+  MTL::Device *_pDevice = nullptr;
+  MTL::CommandQueue *_pCommandQueue = nullptr;
+  MTL::RenderPipelineState *_pPSO = nullptr;
 
-    // Core scene and geometry data
-    Scene* _pScene = nullptr;
+  // Core scene and geometry data
+  Scene *_pScene = nullptr;
 
-    // Buffers
-    MTL::Buffer* _pSphereBuffer = nullptr;
-    MTL::Buffer* _pSphereMaterialBuffer = nullptr;
-    MTL::Buffer* _pTriangleVertexBuffer = nullptr;
-    MTL::Buffer* _pTriangleIndexBuffer = nullptr;
-    MTL::Buffer* _pUniformsBuffer = nullptr;
-    MTL::Buffer* _pBVHBuffer = nullptr;
-    MTL::Buffer* _pPrimitiveIndexBuffer = nullptr;
-    MTL::Buffer* _pTLASBuffer = nullptr;
-    size_t _tlasNodeCount = 0;
-    // Accumulation framebuffers
-    MTL::Texture* _accumulationTargets[2] = {nullptr, nullptr};
+  // Buffers
+  MTL::Buffer *_pSphereBuffer = nullptr;
+  MTL::Buffer *_pSphereMaterialBuffer = nullptr;
+  MTL::Buffer *_pTriangleVertexBuffer = nullptr;
+  MTL::Buffer *_pTriangleIndexBuffer = nullptr;
+  MTL::Buffer *_pUniformsBuffer = nullptr;
+  MTL::Buffer *_pBVHBuffer = nullptr;
+  MTL::Buffer *_pPrimitiveIndexBuffer = nullptr;
+  MTL::Buffer *_pTLASBuffer = nullptr;
+  size_t _tlasNodeCount = 0;
+  // Accumulation framebuffers
+  MTL::Texture *_accumulationTargets[2] = {nullptr, nullptr};
+
+  void rebuildAccelerationStructures();
 };
 
 } // namespace MetalCppPathTracer
