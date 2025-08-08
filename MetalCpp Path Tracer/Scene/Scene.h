@@ -2,6 +2,9 @@
 #define SCENE_H
 
 #include "Material.h"
+#include "Sphere.h"
+#include "Triangle.h"
+#include "Rectangle.h"
 #include <vector>
 #include <limits>
 #include <algorithm>
@@ -18,10 +21,12 @@ enum class PrimitiveType {
 
 struct Primitive {
     PrimitiveType type;
-    simd::float3 data0;
-    simd::float3 data1;
-    simd::float3 data2;
     Material material;
+    union {
+        Sphere sphere;
+        Triangle triangle;
+        Rectangle rectangle;
+    };
 };
 
 struct BVHNode {
@@ -104,8 +109,9 @@ public:
 
         for (const auto& p : primitives) {
             if (p.type == PrimitiveType::Sphere) {
+                const auto& s = p.sphere;
                 printf("Sphere -> Position: (%.2f, %.2f, %.2f), Radius: %.2f\n",
-                       p.data0.x, p.data0.y, p.data0.z, p.data1.x);
+                       s.center.x, s.center.y, s.center.z, s.radius);
             }
         }
         
@@ -121,9 +127,19 @@ public:
         simd::float4* buffer = new simd::float4[primitives.size() * 3];
         for (size_t i = 0; i < primitives.size(); ++i) {
             const auto& p = primitives[i];
-            buffer[3 * i + 0] = simd::make_float4(p.data0, static_cast<float>(p.type));
-            buffer[3 * i + 1] = simd::make_float4(p.data1, 0);
-            buffer[3 * i + 2] = simd::make_float4(p.data2, 0);
+            if (p.type == PrimitiveType::Sphere) {
+                buffer[3 * i + 0] = simd::make_float4(p.sphere.center, static_cast<float>(p.type));
+                buffer[3 * i + 1] = simd::make_float4(simd::make_float3(p.sphere.radius, 0, 0), 0);
+                buffer[3 * i + 2] = simd::make_float4(simd::float3(0), 0);
+            } else if (p.type == PrimitiveType::Rectangle) {
+                buffer[3 * i + 0] = simd::make_float4(p.rectangle.center, static_cast<float>(p.type));
+                buffer[3 * i + 1] = simd::make_float4(p.rectangle.u, 0);
+                buffer[3 * i + 2] = simd::make_float4(p.rectangle.v, 0);
+            } else { // Triangle
+                buffer[3 * i + 0] = simd::make_float4(p.triangle.v0, static_cast<float>(p.type));
+                buffer[3 * i + 1] = simd::make_float4(p.triangle.v1, 0);
+                buffer[3 * i + 2] = simd::make_float4(p.triangle.v2, 0);
+            }
         }
         return buffer;
     }
@@ -145,7 +161,7 @@ public:
         size_t index = 0;
         for (const auto& p : primitives) {
             if (p.type == PrimitiveType::Sphere) {
-                buffer[index++] = simd::make_float4(p.data0, p.data1.x); // pos.xyz + radius
+                buffer[index++] = simd::make_float4(p.sphere.center, p.sphere.radius);
             }
         }
 
@@ -234,9 +250,9 @@ public:
             if (p.type != PrimitiveType::Triangle)
                 continue;
 
-            outVertices.push_back(p.data0);
-            outVertices.push_back(p.data1);
-            outVertices.push_back(p.data2);
+            outVertices.push_back(p.triangle.v0);
+            outVertices.push_back(p.triangle.v1);
+            outVertices.push_back(p.triangle.v2);
 
             outIndices.push_back(simd::make_uint3(baseVertex, baseVertex + 1, baseVertex + 2));
             baseVertex += 3;
@@ -283,7 +299,8 @@ private:
         for (int axis = 0; axis < axisCount; ++axis) {
             std::sort(primitiveIndices.begin() + start, primitiveIndices.begin() + end,
                       [&](size_t a, size_t b) {
-                          return primitives[a].data0[axis] < primitives[b].data0[axis];
+                          return primitiveAxisValue(primitives[a], axis) <
+                                 primitiveAxisValue(primitives[b], axis);
                       });
 
             std::vector<simd::float3> leftMin(end - start);
@@ -339,7 +356,8 @@ private:
 
         std::sort(primitiveIndices.begin() + start, primitiveIndices.begin() + end,
                   [&](size_t a, size_t b) {
-                      return primitives[a].data0[bestAxis] < primitives[b].data0[bestAxis];
+                      return primitiveAxisValue(primitives[a], bestAxis) <
+                             primitiveAxisValue(primitives[b], bestAxis);
                   });
 
         int leftChild = buildBVHRecursive(start, bestSplit);
@@ -356,15 +374,24 @@ private:
         return 2.0f * (d.x * d.y + d.y * d.z + d.z * d.x);
     }
 
+    float primitiveAxisValue(const Primitive& p, int axis) const {
+        if (p.type == PrimitiveType::Sphere)
+            return p.sphere.center[axis];
+        else if (p.type == PrimitiveType::Rectangle)
+            return p.rectangle.center[axis];
+        else
+            return (p.triangle.v0[axis] + p.triangle.v1[axis] + p.triangle.v2[axis]) / 3.0f;
+    }
+
     void primitiveBounds(const Primitive& p, simd::float3& pMin, simd::float3& pMax) const {
         if (p.type == PrimitiveType::Sphere) {
-            float r = p.data1.x;
-            pMin = p.data0 - r;
-            pMax = p.data0 + r;
+            float r = p.sphere.radius;
+            pMin = p.sphere.center - r;
+            pMax = p.sphere.center + r;
         } else if (p.type == PrimitiveType::Rectangle) {
-            simd::float3 c = p.data0;
-            simd::float3 e1 = p.data1;
-            simd::float3 e2 = p.data2;
+            simd::float3 c = p.rectangle.center;
+            simd::float3 e1 = p.rectangle.u;
+            simd::float3 e2 = p.rectangle.v;
             simd::float3 c1 = c - e1 - e2;
             simd::float3 c2 = c - e1 + e2;
             simd::float3 c3 = c + e1 - e2;
@@ -372,8 +399,9 @@ private:
             pMin = simd::min(simd::min(c1, c2), simd::min(c3, c4));
             pMax = simd::max(simd::max(c1, c2), simd::max(c3, c4));
         } else { // Triangle
-            pMin = simd::min(p.data0, simd::min(p.data1, p.data2));
-            pMax = simd::max(p.data0, simd::max(p.data1, p.data2));
+            const auto& t = p.triangle;
+            pMin = simd::min(t.v0, simd::min(t.v1, t.v2));
+            pMax = simd::max(t.v0, simd::max(t.v1, t.v2));
         }
     }
 };

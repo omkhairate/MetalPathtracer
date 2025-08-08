@@ -98,12 +98,10 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
     for (auto* e = root->FirstChildElement(); e; e = e->NextSiblingElement()) {
         std::string tag = e->Name();
         if (tag == "Sphere") {
-            Primitive p;
+            Primitive p{};
             p.type = PrimitiveType::Sphere;
-            p.data0 = parseVec3(e->Attribute("position"));
-            float r = e->FloatAttribute("radius", 1.0f);
-            p.data1 = simd::make_float3(r,0,0);
-            p.data2 = simd::float3(0); // unused for spheres
+            p.sphere.center = parseVec3(e->Attribute("position"));
+            p.sphere.radius = e->FloatAttribute("radius", 1.0f);
 
             p.material.albedo = parseVec3(e->Attribute("albedo"));
             p.material.emissionColor = parseVec3(e->Attribute("emission"));
@@ -113,11 +111,11 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
             scene->addPrimitive(p);
         }
         else if (tag == "Rectangle") {
-            Primitive p;
+            Primitive p{};
             p.type = PrimitiveType::Rectangle;
-            p.data0 = parseVec3(e->Attribute("position"));
-            p.data1 = parseVec3(e->Attribute("u"));
-            p.data2 = parseVec3(e->Attribute("v"));
+            p.rectangle.center = parseVec3(e->Attribute("position"));
+            p.rectangle.u = parseVec3(e->Attribute("u"));
+            p.rectangle.v = parseVec3(e->Attribute("v"));
 
             p.material.albedo = parseVec3(e->Attribute("albedo"));
             p.material.emissionColor = parseVec3(e->Attribute("emission"));
@@ -145,11 +143,11 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
             m.emissionPower = e->FloatAttribute("emissionPower", 0);
 
             for (const auto& tri : tris) {
-                Primitive p;
+                Primitive p{};
                 p.type = PrimitiveType::Triangle;
-                p.data0 = pos + scale * verts[tri.x];
-                p.data1 = pos + scale * verts[tri.y];
-                p.data2 = pos + scale * verts[tri.z];
+                p.triangle.v0 = pos + scale * verts[tri.x];
+                p.triangle.v1 = pos + scale * verts[tri.y];
+                p.triangle.v2 = pos + scale * verts[tri.z];
                 p.material = m;
                 scene->addPrimitive(p);
             }

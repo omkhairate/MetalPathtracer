@@ -186,16 +186,16 @@ void Renderer::updateVisibleScene() {
   for (size_t i = 0; i < primCount; ++i) {
     const Primitive &p = _allPrimitives[i];
     if (p.type == PrimitiveType::Sphere) {
-      _primitiveBounds[i] = {p.data0, p.data1.x};
+      _primitiveBounds[i] = {p.sphere.center, p.sphere.radius};
     } else if (p.type == PrimitiveType::Triangle) {
-      simd::float3 c = (p.data0 + p.data1 + p.data2) / 3.0f;
-      float r = simd::length(p.data0 - c);
-      r = std::max(r, (float)simd::length(p.data1 - c));
-      r = std::max(r, (float)simd::length(p.data2 - c));
+      simd::float3 c = (p.triangle.v0 + p.triangle.v1 + p.triangle.v2) / 3.0f;
+      float r = simd::length(p.triangle.v0 - c);
+      r = std::max(r, (float)simd::length(p.triangle.v1 - c));
+      r = std::max(r, (float)simd::length(p.triangle.v2 - c));
       _primitiveBounds[i] = {c, r};
     } else {
-      float r = simd::length(p.data1) + simd::length(p.data2);
-      _primitiveBounds[i] = {p.data0, r};
+      float r = simd::length(p.rectangle.u) + simd::length(p.rectangle.v);
+      _primitiveBounds[i] = {p.rectangle.center, r};
     }
   }
 
