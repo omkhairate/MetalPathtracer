@@ -13,6 +13,7 @@ void Scene::clear() {
     primitives.clear();
     bvhNodes.clear();
     primitiveIndices.clear();
+    cameraPath.clear();
     screenSize = {1280.f, 720.f};
     maxRayDepth = 32;
 }
