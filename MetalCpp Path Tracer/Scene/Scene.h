@@ -68,6 +68,9 @@ public:
         return primitiveIndices;
     }
 
+    // Expose raw primitives for higher-level systems (e.g., view frustum culling)
+    const std::vector<Primitive>& getPrimitives() const { return primitives; }
+
     void buildBVH() {
         std::stable_sort(primitives.begin(), primitives.end(),
                          [](const Primitive& a, const Primitive& b) {
