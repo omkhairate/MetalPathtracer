@@ -1,7 +1,13 @@
 <Scene width="1280" height="720" maxRayDepth="32">
     <CameraPath>
+        <!-- Start near the objects -->
         <Keyframe frame="0" position="0,20,50" lookAt="0,20,0" />
-        <Keyframe frame="120" position="0,20,30" lookAt="0,20,0" />
+        <!-- Hold position for a few frames -->
+        <Keyframe frame="10" position="0,20,50" lookAt="0,20,0" />
+        <!-- Quickly move behind the scene so objects leave the view -->
+        <Keyframe frame="20" position="0,20,-300" lookAt="0,20,-400" />
+        <!-- Remain far away for the rest of the animation -->
+        <Keyframe frame="120" position="0,20,-300" lookAt="0,20,-400" />
     </CameraPath>
     <!-- Ground -->
     <Sphere position="0,-10000,0" radius="10000" albedo="0.8,0.8,0.8" emission="0,0,0" materialType="0" emissionPower="0" />
