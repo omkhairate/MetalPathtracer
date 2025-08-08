@@ -521,24 +521,20 @@ void Renderer::rebuildAccelerationStructures() {
   delete[] rawIndices;
 
   // Export acceleration structures for visualization.  Resolve the output
-  // directory relative to the first ancestor that already contains a `runs`
-  // folder so that OBJ files are written to the project's top-level `runs`
-  // directory regardless of the executable's current working directory. If no
-  // such ancestor exists, fall back to the starting working directory instead
-  // of the filesystem root so that export succeeds without requiring root
-  // permissions.
+  // directory relative to this source file so that OBJ files are written to
+  // the project's top-level `runs` directory even when the executable runs
+  // from an external build directory (e.g., Xcode's DerivedData).  Using the
+  // compile-time path avoids relying on the process's current working
+  // directory, which may not be inside the repository and previously resulted
+  // in the files being written elsewhere or not at all.
   namespace fs = std::filesystem;
-  fs::path base = fs::current_path();
-  fs::path start = base;
-  while (!fs::exists(base / "runs")) {
-    if (!base.has_parent_path()) {
-      base = start;
-      break;
-    }
-    base = base.parent_path();
-  }
-  fs::path runsPath = base / "runs";
+  fs::path runsPath = fs::path(__FILE__).parent_path().parent_path().parent_path() /
+                      "runs";
   fs::create_directories(runsPath);
-  _pScene->exportBVHAsOBJ((runsPath / "blas.obj").string());
-  _pScene->exportTLASAsOBJ((runsPath / "tlas.obj").string());
+  std::string blasPath = (runsPath / "blas.obj").string();
+  std::string tlasPath = (runsPath / "tlas.obj").string();
+  if (!_pScene->exportBVHAsOBJ(blasPath))
+    printf("Failed to export BLAS OBJ to %s\n", blasPath.c_str());
+  if (!_pScene->exportTLASAsOBJ(tlasPath))
+    printf("Failed to export TLAS OBJ to %s\n", tlasPath.c_str());
 }

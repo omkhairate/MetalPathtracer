@@ -47,8 +47,8 @@ public:
     void createTriangleBuffers(std::vector<simd::float3> &outVertices,
                                std::vector<simd::uint3> &outIndices);
 
-    void exportBVHAsOBJ(const std::string &path);
-    void exportTLASAsOBJ(const std::string &path);
+    bool exportBVHAsOBJ(const std::string &path);
+    bool exportTLASAsOBJ(const std::string &path);
 
     std::vector<CameraKeyframe> cameraPath;
 
