@@ -208,18 +208,13 @@ static void writeBoxOBJ(std::ofstream &out, const simd::float3 &bmin,
         {bmax.x, bmax.y, bmax.z}, {bmin.x, bmax.y, bmax.z}};
     for (int i = 0; i < 8; ++i)
         out << "v " << v[i].x << " " << v[i].y << " " << v[i].z << "\n";
-    out << "f " << idx << " " << idx + 1 << " " << idx + 2 << "\n";
-    out << "f " << idx << " " << idx + 2 << " " << idx + 3 << "\n";
-    out << "f " << idx + 4 << " " << idx + 5 << " " << idx + 6 << "\n";
-    out << "f " << idx + 4 << " " << idx + 6 << " " << idx + 7 << "\n";
-    out << "f " << idx << " " << idx + 1 << " " << idx + 5 << "\n";
-    out << "f " << idx << " " << idx + 5 << " " << idx + 4 << "\n";
-    out << "f " << idx + 1 << " " << idx + 2 << " " << idx + 6 << "\n";
-    out << "f " << idx + 1 << " " << idx + 6 << " " << idx + 5 << "\n";
-    out << "f " << idx + 2 << " " << idx + 3 << " " << idx + 7 << "\n";
-    out << "f " << idx + 2 << " " << idx + 7 << " " << idx + 6 << "\n";
-    out << "f " << idx + 3 << " " << idx << " " << idx + 4 << "\n";
-    out << "f " << idx + 3 << " " << idx + 4 << " " << idx + 7 << "\n";
+
+    // Export edges so that visualization tools show a wireframe similar to the
+    // renderer's debug view instead of solid faces that can occlude geometry.
+    int edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
+                        {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+    for (const auto &e : edges)
+        out << "l " << idx + e[0] << " " << idx + e[1] << "\n";
     idx += 8;
 }
 
