@@ -1,4 +1,5 @@
 #include "ApplicationDelegate.h"
+#include "SceneLoader.h"
 
 using namespace MetalCppPathTracer;
 
@@ -25,7 +26,15 @@ void ApplicationDelegate::applicationDidFinishLaunching(
   if (_initialized)
     return;
   _initialized = true;
-  CGRect frame = {{100.0, 100.0}, {1280.0, 720.0}};
+
+  Scene tmpScene;
+  SceneLoader::LoadSceneFromXML(
+      "/Users/apollo/Downloads/"
+      "MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path "
+      "Tracer/scene.xml",
+      &tmpScene);
+
+  CGRect frame = {{100.0, 100.0}, {tmpScene.screenSize.x, tmpScene.screenSize.y}};
 
   _pWindow = NS::Window::alloc()->init(frame,
                                        NS::WindowStyleMaskClosable |

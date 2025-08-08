@@ -57,7 +57,8 @@ float4 fragment fragmentMain(
         materials,
         u.primitiveCount,
         primitiveIndices,
-        seed
+        seed,
+        u.maxRayDepth
     );
 
 

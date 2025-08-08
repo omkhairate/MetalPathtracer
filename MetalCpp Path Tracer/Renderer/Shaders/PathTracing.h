@@ -214,14 +214,13 @@ inline float4 rayColor(
     device const float4* materials,
     uint primitiveCount,
     device const int* primitiveIndices,
-    thread uint32_t& seed)
+    thread uint32_t& seed,
+    uint maxRayDepth)
 {
-    constexpr size_t maxRayDepth = 32;
-
     float4 absorption = float4(1.0);
     float4 light = float4(0.0);
 
-    for (size_t depth = 0; depth < maxRayDepth; ++depth)
+    for (uint depth = 0; depth < maxRayDepth; ++depth)
     {
         intersection bestHit;
         bestHit.t = INFINITY;
