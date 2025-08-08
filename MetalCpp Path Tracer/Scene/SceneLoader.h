@@ -8,7 +8,8 @@ namespace MetalCppPathTracer {
 
 class SceneLoader {
 public:
-    static void LoadSceneFromXML(const std::string& path, Scene* scene);
+    // Returns true on success, false if the XML could not be loaded or parsed
+    static bool LoadSceneFromXML(const std::string& path, Scene* scene);
 };
 
 }

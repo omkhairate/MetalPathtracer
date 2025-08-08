@@ -6,6 +6,7 @@
 #include "SceneLoader.h"
 #include <cstdio>
 #include <simd/simd.h>
+#include <filesystem>
 
 using namespace MetalCppPathTracer;
 
@@ -122,7 +123,13 @@ void Renderer::buildShaders() {
 }
 
 void Renderer::updateVisibleScene() {
-  SceneLoader::LoadSceneFromXML("scene.xml", _pScene);
+  // Attempt to load scene from working directory. If it fails, try a path
+  // relative to the source file location.
+  if (!SceneLoader::LoadSceneFromXML("scene.xml", _pScene)) {
+    std::filesystem::path alt =
+        std::filesystem::path(__FILE__).parent_path() / "../scene.xml";
+    SceneLoader::LoadSceneFromXML(alt.string(), _pScene);
+  }
 
   Camera::screenSize = _pScene->screenSize;
 

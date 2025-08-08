@@ -72,11 +72,11 @@ static void LoadOBJ(const std::string& path, std::vector<simd::float3>& verts, s
     printf("Loaded OBJ: %zu vertices, %zu triangles\n", verts.size(), tris.size());
 }
 
-void SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
+bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
     XMLDocument doc;
     if (doc.LoadFile(path.c_str()) != XML_SUCCESS) {
         printf("Failed to load scene XML: %s\n", path.c_str());
-        return;
+        return false;
     }
 
     scene->clear();
@@ -84,7 +84,7 @@ void SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
     auto* root = doc.FirstChildElement("Scene");
     if (!root) {
         printf("No <Scene> root.\n");
-        return;
+        return false;
     }
 
     scene->screenSize.x = root->FloatAttribute("width", scene->screenSize.x);
@@ -148,6 +148,8 @@ void SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
             }
         }
     }
+
+    return true;
 }
 
 }
