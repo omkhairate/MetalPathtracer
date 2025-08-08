@@ -123,9 +123,6 @@ void Renderer::updateVisibleScene()
     _pScene->buildBVH();
     printf("BVH node count: %zu\n", _pScene->getBVHNodeCount());
 
-    _pScene->saveTLASObj("runs/tlas.obj");
-    _pScene->saveBLASObj("runs/blas.obj");
-
     // BVH node buffer
     simd::float4* bvhData = _pScene->createBVHBuffer();
     if (_pBVHBuffer) _pBVHBuffer->release();
