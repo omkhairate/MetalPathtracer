@@ -1,5 +1,6 @@
 #include "ApplicationDelegate.h"
 #include "SceneLoader.h"
+#include <filesystem>
 
 using namespace MetalCppPathTracer;
 
@@ -28,13 +29,11 @@ void ApplicationDelegate::applicationDidFinishLaunching(
   _initialized = true;
 
   Scene tmpScene;
-  bool loaded = SceneLoader::LoadSceneFromXML(
-      "/Users/apollo/Downloads/"
-      "MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path "
-      "Tracer/scene.xml",
-      &tmpScene);
+  bool loaded = SceneLoader::LoadSceneFromXML("scene.xml", &tmpScene);
   if (!loaded) {
-    SceneLoader::LoadSceneFromXML("scene.xml", &tmpScene);
+    std::filesystem::path alt =
+        std::filesystem::path(__FILE__).parent_path() / "../scene.xml";
+    SceneLoader::LoadSceneFromXML(alt.string(), &tmpScene);
   }
 
   CGRect frame = {{100.0, 100.0}, {tmpScene.screenSize.x, tmpScene.screenSize.y}};
