@@ -132,10 +132,6 @@ void Renderer::updateVisibleScene() {
          _pScene->getPrimitiveCount() - _pScene->getTriangleCount(),
          _pScene->getTriangleCount());
 
-  _pScene->restoreVisiblePrimitives(Camera::position, Camera::forward,
-                                   Camera::verticalFov);
-  _pScene->cullOffscreenPrimitives(Camera::position, Camera::forward,
-                                   Camera::verticalFov);
   _pScene->buildBVH();
 
   // Report separate BLAS and TLAS node counts
@@ -151,7 +147,6 @@ void Renderer::updateVisibleScene() {
       bvhData, sizeof(simd::float4) * _pScene->getBVHNodeCount() * 2,
       MTL::ResourceStorageModeManaged);
   _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
-  _pScene->dumpBVH("bvh_dump.txt");
   delete[] bvhData; // optional if `createBVHBuffer` allocates on heap
 
   // Build TLAS buffer from root children
@@ -169,7 +164,6 @@ void Renderer::updateVisibleScene() {
   } else {
     _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
   }
-  Scene::dumpTLAS(tlasData, tlasCount, "tlas_dump.txt");
   delete[] tlasData;
 
   // 🆕 Primitive index buffer (for BVH leaf traversal)
@@ -366,10 +360,6 @@ void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
 }
 
 void Renderer::rebuildAccelerationStructures() {
-  _pScene->restoreVisiblePrimitives(Camera::position, Camera::forward,
-                                   Camera::verticalFov);
-  _pScene->cullOffscreenPrimitives(Camera::position, Camera::forward,
-                                   Camera::verticalFov);
   _pScene->buildBVH();
 
   size_t newBlasCount = _pScene->getBVHNodeCount();
@@ -386,7 +376,6 @@ void Renderer::rebuildAccelerationStructures() {
       bvhData, sizeof(simd::float4) * newBlasCount * 2,
       MTL::ResourceStorageModeManaged);
   _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
-  _pScene->dumpBVH("bvh_dump.txt");
   delete[] bvhData;
 
   size_t tlasCount = 0;
@@ -406,7 +395,6 @@ void Renderer::rebuildAccelerationStructures() {
   } else {
     _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
   }
-  Scene::dumpTLAS(tlasData, tlasCount, "tlas_dump.txt");
   delete[] tlasData;
 
   int *rawIndices = _pScene->createPrimitiveIndexBuffer();
