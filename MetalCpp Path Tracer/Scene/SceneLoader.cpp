@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 #include "tiny_obj_loader.h"
 
 using namespace tinyxml2;
@@ -87,6 +88,9 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
         return false;
     }
 
+    // Resolve relative paths against the directory containing the scene file
+    std::filesystem::path baseDir = std::filesystem::path(path).parent_path();
+
     scene->screenSize.x = root->FloatAttribute("width", scene->screenSize.x);
     scene->screenSize.y = root->FloatAttribute("height", scene->screenSize.y);
     scene->maxRayDepth = root->UnsignedAttribute("maxRayDepth", scene->maxRayDepth);
@@ -126,7 +130,10 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
             std::vector<simd::float3> verts;
             std::vector<simd::uint3> tris;
 
-            LoadOBJ(e->Attribute("file"), verts, tris);
+            // Build full path to mesh file relative to the scene's directory
+            const char* fileAttr = e->Attribute("file");
+            std::filesystem::path meshPath = baseDir / (fileAttr ? fileAttr : "");
+            LoadOBJ(meshPath.string(), verts, tris);
 
             simd::float3 pos = parseVec3(e->Attribute("position"));
             float scale = e->FloatAttribute("scale", 1.0f);
