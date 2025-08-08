@@ -123,7 +123,10 @@ void Renderer::updateVisibleScene()
            _pScene->getTriangleCount());
 
     _pScene->buildBVH();
-    printf("BVH node count: %zu\n", _pScene->getBVHNodeCount());
+
+    // Report separate BLAS and TLAS node counts
+    size_t blasNodeCount = _pScene->getBVHNodeCount();
+    printf("BLAS node count: %zu\n", blasNodeCount);
 
     // BVH node buffer
     simd::float4* bvhData = _pScene->createBVHBuffer();
@@ -139,6 +142,7 @@ void Renderer::updateVisibleScene()
     // Build TLAS buffer from root children
     size_t tlasCount = 0;
     simd::float4* tlasData = _pScene->createTLASBuffer(tlasCount);
+    printf("TLAS node count: %zu\n", tlasCount);
     if (_pTLASBuffer) _pTLASBuffer->release();
     if (tlasData && tlasCount > 0) {
         _pTLASBuffer = _pDevice->newBuffer(
