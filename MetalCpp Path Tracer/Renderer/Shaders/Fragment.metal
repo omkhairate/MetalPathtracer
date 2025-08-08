@@ -14,6 +14,7 @@ float4 fragment fragmentMain(
     device const float3* vertexBuffer [[buffer(4)]],
     device const uint3* indexBuffer [[buffer(5)]],
     device const int* primitiveIndices [[buffer(6)]],
+    device const float4* tlasNodes [[buffer(7)]],
     texture2d<float, access::read_write> lastFrame [[texture(0)]],
     texture2d<float, access::read_write> currentFrame [[texture(1)]])
 
@@ -49,6 +50,8 @@ float4 fragment fragmentMain(
 
     float4 color = rayColor(
         r,
+        tlasNodes,
+        u.tlasNodeCount,
         bvhNodes,
         primitives,       // <- Each primitive is 3 float4s
         materials,

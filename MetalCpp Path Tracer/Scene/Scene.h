@@ -158,6 +158,41 @@ public:
         return buffer;
     }
 
+    // Build a simple TLAS from the root's children. Returns number of TLAS nodes via outCount
+    simd::float4* createTLASBuffer(size_t& outCount) {
+        outCount = 0;
+        if (bvhNodes.empty()) {
+            return nullptr;
+        }
+
+        const BVHNode& root = bvhNodes[0];
+        if (root.count > 0) {
+            // Degenerate case: only a single leaf BVH, treat as one TLAS node
+            outCount = 1;
+            simd::float4* buffer = new simd::float4[2];
+            int rootIndex = 0;
+            buffer[0] = simd::make_float4(root.boundsMin, *(float*)&rootIndex);
+            buffer[1] = simd::make_float4(root.boundsMax, 0.0f);
+            return buffer;
+        }
+
+        int leftChild = root.leftFirst;
+        int rightChild = -root.count;
+
+        outCount = 2;
+        simd::float4* buffer = new simd::float4[outCount * 2];
+
+        const BVHNode& left = bvhNodes[leftChild];
+        buffer[0] = simd::make_float4(left.boundsMin, *(float*)&leftChild);
+        buffer[1] = simd::make_float4(left.boundsMax, 0.0f);
+
+        const BVHNode& right = bvhNodes[rightChild];
+        buffer[2] = simd::make_float4(right.boundsMin, *(float*)&rightChild);
+        buffer[3] = simd::make_float4(right.boundsMax, 0.0f);
+
+        return buffer;
+    }
+
     int* createPrimitiveIndexBuffer() {
         int* buffer = new int[primitiveIndices.size()];
         for (size_t i = 0; i < primitiveIndices.size(); ++i) {

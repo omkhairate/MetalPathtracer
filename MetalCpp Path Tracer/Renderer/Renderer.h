@@ -50,7 +50,9 @@ private:
     MTL::Buffer* _pTriangleIndexBuffer = nullptr;
     MTL::Buffer* _pUniformsBuffer = nullptr;
     MTL::Buffer* _pBVHBuffer = nullptr;
-    MTL::Buffer* _pPrimitiveIndexBuffer = nullptr;  
+    MTL::Buffer* _pPrimitiveIndexBuffer = nullptr;
+    MTL::Buffer* _pTLASBuffer = nullptr;
+    size_t _tlasNodeCount = 0;
     // Accumulation framebuffers
     MTL::Texture* _accumulationTargets[2] = {nullptr, nullptr};
 };
