@@ -264,9 +264,10 @@ inline float4 rayColor(
             light += absorption * float4(emissionColor, 1.0) * emissionPower;
         }
 
-        float3 target = bestHit.normal + randomUnitVector(seed);
-        r.origin = bestHit.point + 0.0001 * bestHit.normal;
-        r.direction = normalize(target);
+        float3 offsetNormal = bestHit.frontFace ? bestHit.normal : -bestHit.normal;
+        r.origin = bestHit.point + 0.0001 * offsetNormal;
+        scatter(r, bestHit, materialType, seed);
+        seed = random(seed);
         absorption *= float4(albedo, 1.0);
 
         // Russian roulette termination to avoid tracing very long ray paths
