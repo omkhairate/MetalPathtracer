@@ -87,6 +87,10 @@ void SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
         return;
     }
 
+    scene->screenSize.x = root->FloatAttribute("width", scene->screenSize.x);
+    scene->screenSize.y = root->FloatAttribute("height", scene->screenSize.y);
+    scene->maxRayDepth = root->UnsignedAttribute("maxRayDepth", scene->maxRayDepth);
+
     for (auto* e = root->FirstChildElement(); e; e = e->NextSiblingElement()) {
         std::string tag = e->Name();
         if (tag == "Sphere") {

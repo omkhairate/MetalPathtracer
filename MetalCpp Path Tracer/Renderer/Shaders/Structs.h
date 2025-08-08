@@ -37,8 +37,8 @@ struct UniformsData
     uint64_t frameCount = 0;
     uint64_t totalPrimitiveCount;
     uint64_t tlasNodeCount;
-
-
+    uint maxRayDepth;
+    uint _pad;
 };
 
 

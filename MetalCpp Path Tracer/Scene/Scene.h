@@ -6,6 +6,7 @@
 #include <limits>
 #include <algorithm>
 #include <simd/simd.h>
+#include <cstdint>
 
 namespace MetalCppPathTracer {
 
@@ -31,12 +32,16 @@ struct BVHNode {
 
 class Scene {
 public:
-    Scene() = default;
+    Scene() {
+        clear();
+    }
 
     void clear() {
         primitives.clear();
         bvhNodes.clear();
         primitiveIndices.clear();
+        screenSize = {1280.f, 720.f};
+        maxRayDepth = 32;
     }
 
     size_t addPrimitive(const Primitive& p) {
@@ -67,6 +72,9 @@ public:
     const std::vector<size_t>& getPrimitiveIndices() const {
         return primitiveIndices;
     }
+
+    simd::float2 screenSize;
+    uint32_t maxRayDepth;
 
     void buildBVH() {
         std::stable_sort(primitives.begin(), primitives.end(),

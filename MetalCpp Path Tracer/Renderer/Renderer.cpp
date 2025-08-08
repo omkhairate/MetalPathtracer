@@ -25,6 +25,8 @@ struct UniformsData {
   uint64_t frameCount = 0;
   uint64_t totalPrimitiveCount;
   uint64_t tlasNodeCount;
+  uint32_t maxRayDepth;
+  uint32_t _pad;
 };
 
 inline uint32_t bitm_random() {
@@ -43,7 +45,6 @@ Renderer::Renderer(MTL::Device *pDevice)
   _pCommandQueue = _pDevice->newCommandQueue();
 
   Camera::reset();
-  Camera::screenSize = {1280, 720};
 
   updateVisibleScene();
   buildShaders();
@@ -126,6 +127,8 @@ void Renderer::updateVisibleScene() {
       "MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path "
       "Tracer/scene.xml",
       _pScene);
+
+  Camera::screenSize = _pScene->screenSize;
 
   printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles)\n",
          _pScene->getPrimitiveCount(),
@@ -303,6 +306,7 @@ void Renderer::updateUniforms() {
   u.primitiveCount = _pScene->getPrimitiveCount();
   u.triangleCount = _pScene->getTriangleCount();
   u.tlasNodeCount = _tlasNodeCount;
+  u.maxRayDepth = _pScene->maxRayDepth;
 
   _pUniformsBuffer->didModifyRange(NS::Range::Make(0, sizeof(UniformsData)));
 }
