@@ -1,21 +1,17 @@
 <Scene>
-    <!-- Dramatic camera sweep across the scene -->
-    <!-- The camera starts high and to the right before travelling diagonally to the far left -->
-    <Camera start="100,50,200" end="-150,10,-300" />
-
     <!-- Ground -->
     <Sphere position="0,-10000,0" radius="10000" albedo="0.8,0.8,0.8" emission="0,0,0" materialType="0" emissionPower="0" />
 
     <!-- Large floating sphere -->
-    <!-- Initially near the camera and swept behind it as the camera follows its diagonal path -->
+    <!-- Positioned ahead of the camera initially and behind it after the camera moves forward -->
     <Sphere position="0,100,0" radius="40" albedo="0.8,0.8,0.8" emission="0,0,0" materialType="0" emissionPower="0" />
 
     <!-- Small sphere that emits light -->
-    <!-- Starts in view and ends up far behind the camera at the end of the diagonal movement -->
+    <!-- Starts in view and ends up behind the camera at the end of the movement -->
     <Sphere position="0,20,0" radius="10" albedo="0.0,0.0,0.0" emission="1.0,0.9,0.7" materialType="0" emissionPower="5" />
 
     <!-- Bunny Mesh beside the light sphere -->
-    <!-- Positioned so it is visible only near the camera's starting point -->
+    <!-- Its position ensures it is visible only at the beginning of the camera path -->
     <Mesh
         file="/Users/apollo/Downloads/MetalPathtracing-05e922c76da6c603e7840e71f7b563ad9b7eb4ea/MetalCpp Path Tracer/assets/bunny.obj"
         position="-25,0,0"

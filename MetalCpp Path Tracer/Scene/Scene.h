@@ -6,8 +6,6 @@
 #include <limits>
 #include <algorithm>
 #include <simd/simd.h>
-#include <fstream>
-#include <string>
 
 namespace MetalCppPathTracer {
 
@@ -186,77 +184,6 @@ public:
 
             outIndices.push_back(simd::make_uint3(baseVertex, baseVertex + 1, baseVertex + 2));
             baseVertex += 3;
-        }
-    }
-
-    void saveTLASObj(const std::string& path) const {
-        std::ofstream out(path);
-        if (!out) {
-            printf("Failed to open %s for writing\n", path.c_str());
-            return;
-        }
-        size_t baseIndex = 1;
-        for (const auto& node : bvhNodes) {
-            simd::float3 mn = node.boundsMin;
-            simd::float3 mx = node.boundsMax;
-            simd::float3 v[8] = {
-                {mn.x, mn.y, mn.z},
-                {mx.x, mn.y, mn.z},
-                {mx.x, mx.y, mn.z},
-                {mn.x, mx.y, mn.z},
-                {mn.x, mn.y, mx.z},
-                {mx.x, mn.y, mx.z},
-                {mx.x, mx.y, mx.z},
-                {mn.x, mx.y, mx.z}
-            };
-            for (int i = 0; i < 8; ++i)
-                out << "v " << v[i].x << " " << v[i].y << " " << v[i].z << "\n";
-            out << "f " << baseIndex << " " << baseIndex + 1 << " " << baseIndex + 2 << " " << baseIndex + 3 << "\n";
-            out << "f " << baseIndex + 4 << " " << baseIndex + 5 << " " << baseIndex + 6 << " " << baseIndex + 7 << "\n";
-            out << "f " << baseIndex << " " << baseIndex + 1 << " " << baseIndex + 5 << " " << baseIndex + 4 << "\n";
-            out << "f " << baseIndex + 1 << " " << baseIndex + 2 << " " << baseIndex + 6 << " " << baseIndex + 5 << "\n";
-            out << "f " << baseIndex + 2 << " " << baseIndex + 3 << " " << baseIndex + 7 << " " << baseIndex + 6 << "\n";
-            out << "f " << baseIndex + 3 << " " << baseIndex << " " << baseIndex + 4 << " " << baseIndex + 7 << "\n";
-            baseIndex += 8;
-        }
-    }
-
-    void saveBLASObj(const std::string& path) const {
-        std::ofstream out(path);
-        if (!out) {
-            printf("Failed to open %s for writing\n", path.c_str());
-            return;
-        }
-        size_t baseIndex = 1;
-        for (const auto& p : primitives) {
-            simd::float3 mn, mx;
-            if (p.type == PrimitiveType::Sphere) {
-                float r = p.data1.x;
-                mn = p.data0 - r;
-                mx = p.data0 + r;
-            } else {
-                mn = simd::min(p.data0, simd::min(p.data1, p.data2));
-                mx = simd::max(p.data0, simd::max(p.data1, p.data2));
-            }
-            simd::float3 v[8] = {
-                {mn.x, mn.y, mn.z},
-                {mx.x, mn.y, mn.z},
-                {mx.x, mx.y, mn.z},
-                {mn.x, mx.y, mn.z},
-                {mn.x, mn.y, mx.z},
-                {mx.x, mn.y, mx.z},
-                {mx.x, mx.y, mx.z},
-                {mn.x, mx.y, mx.z}
-            };
-            for (int i = 0; i < 8; ++i)
-                out << "v " << v[i].x << " " << v[i].y << " " << v[i].z << "\n";
-            out << "f " << baseIndex << " " << baseIndex + 1 << " " << baseIndex + 2 << " " << baseIndex + 3 << "\n";
-            out << "f " << baseIndex + 4 << " " << baseIndex + 5 << " " << baseIndex + 6 << " " << baseIndex + 7 << "\n";
-            out << "f " << baseIndex << " " << baseIndex + 1 << " " << baseIndex + 5 << " " << baseIndex + 4 << "\n";
-            out << "f " << baseIndex + 1 << " " << baseIndex + 2 << " " << baseIndex + 6 << " " << baseIndex + 5 << "\n";
-            out << "f " << baseIndex + 2 << " " << baseIndex + 3 << " " << baseIndex + 7 << " " << baseIndex + 6 << "\n";
-            out << "f " << baseIndex + 3 << " " << baseIndex << " " << baseIndex + 4 << " " << baseIndex + 7 << "\n";
-            baseIndex += 8;
         }
     }
 
