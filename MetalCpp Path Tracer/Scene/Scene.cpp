@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <limits>
 #include <cstdio>
+#include <fstream>
 
 namespace MetalCppPathTracer {
 
@@ -196,6 +197,61 @@ int *Scene::createPrimitiveIndexBuffer() {
         buffer[i] = static_cast<int>(primitiveIndices[i]);
     }
     return buffer;
+}
+
+static void writeBoxOBJ(std::ofstream &out, const simd::float3 &bmin,
+                        const simd::float3 &bmax, size_t &idx) {
+    simd::float3 v[8] = {
+        {bmin.x, bmin.y, bmin.z}, {bmax.x, bmin.y, bmin.z},
+        {bmax.x, bmax.y, bmin.z}, {bmin.x, bmax.y, bmin.z},
+        {bmin.x, bmin.y, bmax.z}, {bmax.x, bmin.y, bmax.z},
+        {bmax.x, bmax.y, bmax.z}, {bmin.x, bmax.y, bmax.z}};
+    for (int i = 0; i < 8; ++i)
+        out << "v " << v[i].x << " " << v[i].y << " " << v[i].z << "\n";
+    out << "f " << idx << " " << idx + 1 << " " << idx + 2 << "\n";
+    out << "f " << idx << " " << idx + 2 << " " << idx + 3 << "\n";
+    out << "f " << idx + 4 << " " << idx + 5 << " " << idx + 6 << "\n";
+    out << "f " << idx + 4 << " " << idx + 6 << " " << idx + 7 << "\n";
+    out << "f " << idx << " " << idx + 1 << " " << idx + 5 << "\n";
+    out << "f " << idx << " " << idx + 5 << " " << idx + 4 << "\n";
+    out << "f " << idx + 1 << " " << idx + 2 << " " << idx + 6 << "\n";
+    out << "f " << idx + 1 << " " << idx + 6 << " " << idx + 5 << "\n";
+    out << "f " << idx + 2 << " " << idx + 3 << " " << idx + 7 << "\n";
+    out << "f " << idx + 2 << " " << idx + 7 << " " << idx + 6 << "\n";
+    out << "f " << idx + 3 << " " << idx << " " << idx + 4 << "\n";
+    out << "f " << idx + 3 << " " << idx + 4 << " " << idx + 7 << "\n";
+    idx += 8;
+}
+
+void Scene::exportBVHAsOBJ(const std::string &path) {
+    std::ofstream out(path);
+    if (!out)
+        return;
+    size_t idx = 1;
+    for (const auto &n : bvhNodes) {
+        writeBoxOBJ(out, n.boundsMin, n.boundsMax, idx);
+    }
+}
+
+void Scene::exportTLASAsOBJ(const std::string &path) {
+    size_t count = 0;
+    simd::float4 *data = createTLASBuffer(count);
+    if (!data)
+        return;
+    std::ofstream out(path);
+    if (!out) {
+        delete[] data;
+        return;
+    }
+    size_t idx = 1;
+    for (size_t i = 0; i < count; ++i) {
+        simd::float3 bmin = simd::make_float3(data[2 * i + 0].x, data[2 * i + 0].y,
+                                             data[2 * i + 0].z);
+        simd::float3 bmax = simd::make_float3(data[2 * i + 1].x, data[2 * i + 1].y,
+                                             data[2 * i + 1].z);
+        writeBoxOBJ(out, bmin, bmax, idx);
+    }
+    delete[] data;
 }
 
 void Scene::createTriangleBuffers(std::vector<simd::float3> &outVertices,
