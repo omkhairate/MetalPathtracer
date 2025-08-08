@@ -136,7 +136,8 @@ void Renderer::updateVisibleScene() {
 
   // Report separate BLAS and TLAS node counts
   size_t blasNodeCount = _pScene->getBVHNodeCount();
-  printf("BLAS node count: %zu\n", blasNodeCount);
+  _blasNodeCount = blasNodeCount;
+  printf("BLAS node count: %zu\n", _blasNodeCount);
 
   // BVH node buffer
   simd::float4 *bvhData = _pScene->createBVHBuffer();
@@ -151,7 +152,8 @@ void Renderer::updateVisibleScene() {
   // Build TLAS buffer from root children
   size_t tlasCount = 0;
   simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
-  printf("TLAS node count: %zu\n", tlasCount);
+  _tlasNodeCount = tlasCount;
+  printf("TLAS node count: %zu\n", _tlasNodeCount);
   if (_pTLASBuffer)
     _pTLASBuffer->release();
   if (tlasData && tlasCount > 0) {
@@ -163,7 +165,6 @@ void Renderer::updateVisibleScene() {
     _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
   }
   delete[] tlasData;
-  _tlasNodeCount = tlasCount;
 
   // 🆕 Primitive index buffer (for BVH leaf traversal)
   int *rawIndices = _pScene->createPrimitiveIndexBuffer();
@@ -361,17 +362,29 @@ void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
 void Renderer::rebuildAccelerationStructures() {
   _pScene->buildBVH();
 
+  size_t newBlasCount = _pScene->getBVHNodeCount();
+  if (newBlasCount != _blasNodeCount)
+    printf("BLAS node count changed: %zu -> %zu\n", _blasNodeCount, newBlasCount);
+  else
+    printf("BLAS node count: %zu\n", newBlasCount);
+  _blasNodeCount = newBlasCount;
+
   simd::float4 *bvhData = _pScene->createBVHBuffer();
   if (_pBVHBuffer)
     _pBVHBuffer->release();
   _pBVHBuffer = _pDevice->newBuffer(
-      bvhData, sizeof(simd::float4) * _pScene->getBVHNodeCount() * 2,
+      bvhData, sizeof(simd::float4) * newBlasCount * 2,
       MTL::ResourceStorageModeManaged);
   _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
   delete[] bvhData;
 
   size_t tlasCount = 0;
   simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
+  if (tlasCount != _tlasNodeCount)
+    printf("TLAS node count changed: %zu -> %zu\n", _tlasNodeCount, tlasCount);
+  else
+    printf("TLAS node count: %zu\n", tlasCount);
+  _tlasNodeCount = tlasCount;
   if (_pTLASBuffer)
     _pTLASBuffer->release();
   if (tlasData && tlasCount > 0) {
@@ -383,7 +396,6 @@ void Renderer::rebuildAccelerationStructures() {
     _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
   }
   delete[] tlasData;
-  _tlasNodeCount = tlasCount;
 
   int *rawIndices = _pScene->createPrimitiveIndexBuffer();
   if (_pPrimitiveIndexBuffer)
