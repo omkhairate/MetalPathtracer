@@ -268,6 +268,17 @@ inline float4 rayColor(
         r.origin = bestHit.point + 0.0001 * bestHit.normal;
         r.direction = normalize(target);
         absorption *= float4(albedo, 1.0);
+
+        // Russian roulette termination to avoid tracing very long ray paths
+        if (depth >= 5)
+        {
+            float p = max(absorption.x, max(absorption.y, absorption.z));
+            float randVal = randomFloat(seed);
+            seed = random(seed);
+            if (randVal >= p)
+                break;
+            absorption /= p;
+        }
     }
 
     return clamp(light, 0.0, 1.0);
