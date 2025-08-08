@@ -223,25 +223,31 @@ static void writeBoxOBJ(std::ofstream &out, const simd::float3 &bmin,
     idx += 8;
 }
 
-void Scene::exportBVHAsOBJ(const std::string &path) {
+bool Scene::exportBVHAsOBJ(const std::string &path) {
     std::ofstream out(path);
-    if (!out)
-        return;
+    if (!out) {
+        std::printf("Failed to open %s for writing\n", path.c_str());
+        return false;
+    }
     size_t idx = 1;
     for (const auto &n : bvhNodes) {
         writeBoxOBJ(out, n.boundsMin, n.boundsMax, idx);
     }
+    return true;
 }
 
-void Scene::exportTLASAsOBJ(const std::string &path) {
+bool Scene::exportTLASAsOBJ(const std::string &path) {
     size_t count = 0;
     simd::float4 *data = createTLASBuffer(count);
-    if (!data)
-        return;
+    if (!data) {
+        std::printf("No TLAS data available; skipping export to %s\n", path.c_str());
+        return false;
+    }
     std::ofstream out(path);
     if (!out) {
+        std::printf("Failed to open %s for writing\n", path.c_str());
         delete[] data;
-        return;
+        return false;
     }
     size_t idx = 1;
     for (size_t i = 0; i < count; ++i) {
@@ -252,6 +258,7 @@ void Scene::exportTLASAsOBJ(const std::string &path) {
         writeBoxOBJ(out, bmin, bmax, idx);
     }
     delete[] data;
+    return true;
 }
 
 void Scene::createTriangleBuffers(std::vector<simd::float3> &outVertices,
