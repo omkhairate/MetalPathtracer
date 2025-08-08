@@ -523,10 +523,18 @@ void Renderer::rebuildAccelerationStructures() {
   // Export acceleration structures for visualization.  Resolve the output
   // directory relative to the first ancestor that already contains a `runs`
   // folder so that OBJ files are written to the project's top-level `runs`
-  // directory regardless of the executable's current working directory.
+  // directory regardless of the executable's current working directory. If no
+  // such ancestor exists, fall back to the starting working directory instead
+  // of the filesystem root so that export succeeds without requiring root
+  // permissions.
   namespace fs = std::filesystem;
   fs::path base = fs::current_path();
-  while (!fs::exists(base / "runs") && base.has_parent_path()) {
+  fs::path start = base;
+  while (!fs::exists(base / "runs")) {
+    if (!base.has_parent_path()) {
+      base = start;
+      break;
+    }
     base = base.parent_path();
   }
   fs::path runsPath = base / "runs";
