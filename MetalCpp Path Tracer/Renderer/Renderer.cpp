@@ -172,6 +172,13 @@ void Renderer::updateVisibleScene() {
 
   Camera::screenSize = _pScene->screenSize;
 
+  if (!_pScene->cameraPath.empty()) {
+    const auto &k = _pScene->cameraPath.front();
+    Camera::position = k.position;
+    Camera::forward = simd::normalize(k.lookAt - k.position);
+    Camera::up = {0, 1, 0};
+  }
+
   printf(
       "Scene loaded: %zu total primitives (%zu spheres, %zu triangles, %zu rectangles)\n",
       _pScene->getPrimitiveCount(), _pScene->getSphereCount(),
@@ -306,7 +313,36 @@ void Renderer::buildTextures() {
 }
 
 bool Renderer::updateCamera() {
-  bool changed = Camera::transformWithInputs();
+  bool changed = false;
+  const auto &path = _pScene->cameraPath;
+  if (!path.empty()) {
+    if (_animationFrame <= path.front().frame) {
+      Camera::position = path.front().position;
+      simd::float3 look = path.front().lookAt;
+      Camera::forward = simd::normalize(look - Camera::position);
+    } else if (_animationFrame >= path.back().frame) {
+      Camera::position = path.back().position;
+      simd::float3 look = path.back().lookAt;
+      Camera::forward = simd::normalize(look - Camera::position);
+    } else {
+      for (size_t i = 0; i + 1 < path.size(); ++i) {
+        const auto &k0 = path[i];
+        const auto &k1 = path[i + 1];
+        if (_animationFrame >= k0.frame && _animationFrame <= k1.frame) {
+          float t = float(_animationFrame - k0.frame) / float(k1.frame - k0.frame);
+          Camera::position = k0.position + t * (k1.position - k0.position);
+          simd::float3 look = k0.lookAt + t * (k1.lookAt - k0.lookAt);
+          Camera::forward = simd::normalize(look - Camera::position);
+          break;
+        }
+      }
+    }
+    Camera::up = {0, 1, 0};
+    InputSystem::clearInputs();
+    changed = true;
+  } else {
+    changed = Camera::transformWithInputs();
+  }
   if (changed) {
     recalculateViewport();
     rebuildAccelerationStructures();
@@ -335,12 +371,6 @@ void Renderer::updateUniforms() {
 }
 
 void Renderer::draw(MTK::View *pView) {
-  static int frameCounter = 0;
-  frameCounter++;
-
-  // if (frameCounter % 30 == 0)
-  //     updateVisibleScene();
-
   updateUniforms();
   std::swap(_accumulationTargets[0], _accumulationTargets[1]);
 
@@ -416,6 +446,7 @@ void Renderer::draw(MTK::View *pView) {
   }
 
   pPool->release();
+  _animationFrame++;
 }
 
 void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {

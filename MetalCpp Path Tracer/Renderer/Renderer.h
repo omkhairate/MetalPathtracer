@@ -72,6 +72,8 @@ private:
   bool isInView(const BoundingSphere &b);
   void syncSceneWithActivePrimitives();
   void rebuildAccelerationStructures();
+
+  size_t _animationFrame = 0;
 };
 
 } // namespace MetalCppPathTracer
