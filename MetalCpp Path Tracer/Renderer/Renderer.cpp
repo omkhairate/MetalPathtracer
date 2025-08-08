@@ -7,6 +7,9 @@
 #include <cstdio>
 #include <simd/simd.h>
 #include <filesystem>
+#include <cmath>
+#include <algorithm>
+#include <cstring>
 
 using namespace MetalCppPathTracer;
 
@@ -42,6 +45,42 @@ inline float randomFloat() {
   return (float)bitm_random() / (float)std::numeric_limits<uint32_t>::max();
 }
 
+bool Renderer::isInView(const BoundingSphere &b) {
+  simd::float3 toCenter = b.center - Camera::position;
+  float dist = simd::length(toCenter);
+  if (dist < 1e-5f)
+    return true;
+  simd::float3 dir = toCenter / dist;
+  float cosAngle = simd::dot(simd::normalize(Camera::forward), dir);
+  if (cosAngle <= 0.0f)
+    return false;
+  float angle = acosf(cosAngle);
+  float halfFov = (Camera::verticalFov * M_PI / 180.0f) * 0.5f;
+  float radiusAngle = asinf(std::min(b.radius / dist, 1.0f));
+  return angle <= halfFov + radiusAngle;
+}
+
+void Renderer::syncSceneWithActivePrimitives() {
+  _pScene->clear();
+  _activeToGlobalIndex.clear();
+  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
+    if (_activePrimitive[i]) {
+      _pScene->addPrimitive(_allPrimitives[i]);
+      _activeToGlobalIndex.push_back(i);
+    }
+  }
+  size_t activeCount = _activeToGlobalIndex.size();
+  if (_pIntersectionCountBuffer)
+    _pIntersectionCountBuffer->release();
+  size_t bytes = sizeof(uint32_t) * activeCount;
+  if (bytes == 0)
+    bytes = sizeof(uint32_t);
+  _pIntersectionCountBuffer =
+      _pDevice->newBuffer(bytes, MTL::ResourceStorageModeManaged);
+  memset(_pIntersectionCountBuffer->contents(), 0, bytes);
+  _pIntersectionCountBuffer->didModifyRange(NS::Range::Make(0, bytes));
+}
+
 Renderer::Renderer(MTL::Device *pDevice)
     : _pDevice(pDevice->retain()), _pScene(new Scene()) {
   _pCommandQueue = _pDevice->newCommandQueue();
@@ -50,7 +89,6 @@ Renderer::Renderer(MTL::Device *pDevice)
 
   updateVisibleScene();
   buildShaders();
-  buildBuffers();
   buildTextures();
 
   recalculateViewport();
@@ -73,6 +111,8 @@ Renderer::~Renderer() {
     _pPrimitiveIndexBuffer->release();
   if (_pTLASBuffer)
     _pTLASBuffer->release();
+  if (_pIntersectionCountBuffer)
+    _pIntersectionCountBuffer->release();
 
   for (int i = 0; i < 2; i++)
     if (_accumulationTargets[i])
@@ -124,8 +164,6 @@ void Renderer::buildShaders() {
 }
 
 void Renderer::updateVisibleScene() {
-  // Attempt to load scene from working directory. If it fails, try a path
-  // relative to the source file location.
   if (!SceneLoader::LoadSceneFromXML("scene.xml", _pScene)) {
     std::filesystem::path alt =
         std::filesystem::path(__FILE__).parent_path() / "../scene.xml";
@@ -134,57 +172,35 @@ void Renderer::updateVisibleScene() {
 
   Camera::screenSize = _pScene->screenSize;
 
-  printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles, %zu rectangles)\n",
-         _pScene->getPrimitiveCount(),
-         _pScene->getSphereCount(),
-         _pScene->getTriangleCount(),
-         _pScene->getRectangleCount());
+  printf(
+      "Scene loaded: %zu total primitives (%zu spheres, %zu triangles, %zu rectangles)\n",
+      _pScene->getPrimitiveCount(), _pScene->getSphereCount(),
+      _pScene->getTriangleCount(), _pScene->getRectangleCount());
 
-  _pScene->buildBVH();
-
-  // Report separate BLAS and TLAS node counts
-  size_t blasNodeCount = _pScene->getBVHNodeCount();
-  _blasNodeCount = blasNodeCount;
-  printf("BLAS node count: %zu\n", _blasNodeCount);
-
-  // BVH node buffer
-  simd::float4 *bvhData = _pScene->createBVHBuffer();
-  if (_pBVHBuffer)
-    _pBVHBuffer->release();
-  _pBVHBuffer = _pDevice->newBuffer(
-      bvhData, sizeof(simd::float4) * _pScene->getBVHNodeCount() * 2,
-      MTL::ResourceStorageModeManaged);
-  _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
-  delete[] bvhData; // optional if `createBVHBuffer` allocates on heap
-
-  // Build TLAS buffer from root children
-  size_t tlasCount = 0;
-  simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
-  _tlasNodeCount = tlasCount;
-  printf("TLAS node count: %zu\n", _tlasNodeCount);
-  if (_pTLASBuffer)
-    _pTLASBuffer->release();
-  if (tlasData && tlasCount > 0) {
-    _pTLASBuffer =
-        _pDevice->newBuffer(tlasData, sizeof(simd::float4) * tlasCount * 2,
-                            MTL::ResourceStorageModeManaged);
-    _pTLASBuffer->didModifyRange(NS::Range::Make(0, _pTLASBuffer->length()));
-  } else {
-    _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
+  // Store full primitive list and initialize tracking
+  _allPrimitives = _pScene->getPrimitives();
+  size_t primCount = _allPrimitives.size();
+  _activePrimitive.assign(primCount, true);
+  _inactiveFrames.assign(primCount, 0);
+  _primitiveBounds.resize(primCount);
+  for (size_t i = 0; i < primCount; ++i) {
+    const Primitive &p = _allPrimitives[i];
+    if (p.type == PrimitiveType::Sphere) {
+      _primitiveBounds[i] = {p.data0, p.data1.x};
+    } else if (p.type == PrimitiveType::Triangle) {
+      simd::float3 c = (p.data0 + p.data1 + p.data2) / 3.0f;
+      float r = simd::length(p.data0 - c);
+      r = std::max(r, (float)simd::length(p.data1 - c));
+      r = std::max(r, (float)simd::length(p.data2 - c));
+      _primitiveBounds[i] = {c, r};
+    } else {
+      float r = simd::length(p.data1) + simd::length(p.data2);
+      _primitiveBounds[i] = {p.data0, r};
+    }
   }
-  delete[] tlasData;
 
-  // 🆕 Primitive index buffer (for BVH leaf traversal)
-  int *rawIndices = _pScene->createPrimitiveIndexBuffer();
-  if (_pPrimitiveIndexBuffer)
-    _pPrimitiveIndexBuffer->release();
-  _pPrimitiveIndexBuffer = _pDevice->newBuffer(
-      rawIndices, sizeof(int) * _pScene->getPrimitiveCount(),
-      MTL::ResourceStorageModeManaged);
-  _pPrimitiveIndexBuffer->didModifyRange(
-      NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
-  delete[] rawIndices;
-
+  syncSceneWithActivePrimitives();
+  rebuildAccelerationStructures();
   buildBuffers();
 }
 
@@ -345,6 +361,7 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->setFragmentBuffer(_pTriangleIndexBuffer, 0, 5);
   pEnc->setFragmentBuffer(_pPrimitiveIndexBuffer, 0, 6);
   pEnc->setFragmentBuffer(_pTLASBuffer, 0, 7);
+  pEnc->setFragmentBuffer(_pIntersectionCountBuffer, 0, 8);
 
   pEnc->setFragmentTexture(_accumulationTargets[0], 0);
   pEnc->setFragmentTexture(_accumulationTargets[1], 1);
@@ -355,6 +372,48 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->endEncoding();
   pCmd->presentDrawable(pView->currentDrawable());
   pCmd->commit();
+  pCmd->waitUntilCompleted();
+
+  size_t activeCount = _activeToGlobalIndex.size();
+  uint32_t *counts =
+      _pIntersectionCountBuffer
+          ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
+          : nullptr;
+  bool changed = false;
+  const int OFFLOAD_THRESHOLD = 30;
+  if (counts) {
+    for (size_t i = 0; i < activeCount; ++i) {
+      size_t g = _activeToGlobalIndex[i];
+      uint32_t c = counts[i];
+      if (c > 0) {
+        _inactiveFrames[g] = 0;
+      } else {
+        _inactiveFrames[g]++;
+        if (_inactiveFrames[g] > OFFLOAD_THRESHOLD && _activePrimitive[g]) {
+          _activePrimitive[g] = false;
+          changed = true;
+        }
+      }
+      counts[i] = 0;
+    }
+    _pIntersectionCountBuffer->didModifyRange(
+        NS::Range::Make(0, sizeof(uint32_t) * activeCount));
+  }
+
+  for (size_t g = 0; g < _allPrimitives.size(); ++g) {
+    if (!_activePrimitive[g] && isInView(_primitiveBounds[g])) {
+      _activePrimitive[g] = true;
+      _inactiveFrames[g] = 0;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    syncSceneWithActivePrimitives();
+    rebuildAccelerationStructures();
+    buildBuffers();
+    recalculateViewport();
+  }
 
   pPool->release();
 }
