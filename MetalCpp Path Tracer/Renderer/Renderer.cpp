@@ -517,6 +517,7 @@ void Renderer::rebuildAccelerationStructures() {
   delete[] rawIndices;
 
   // Export acceleration structures for visualization
-  _pScene->exportBVHAsOBJ("blas.obj");
-  _pScene->exportTLASAsOBJ("tlas.obj");
+  std::filesystem::create_directories("runs");
+  _pScene->exportBVHAsOBJ("runs/blas.obj");
+  _pScene->exportTLASAsOBJ("runs/tlas.obj");
 }
