@@ -4,6 +4,7 @@
 #include <Metal/Metal.hpp>
 #include <MetalKit/MetalKit.hpp>
 #include <simd/simd.h>
+#include <vector>
 
 #include "Scene.h"
 
@@ -51,11 +52,25 @@ private:
   MTL::Buffer *_pBVHBuffer = nullptr;
   MTL::Buffer *_pPrimitiveIndexBuffer = nullptr;
   MTL::Buffer *_pTLASBuffer = nullptr;
+  MTL::Buffer *_pIntersectionCountBuffer = nullptr;
   size_t _blasNodeCount = 0;
   size_t _tlasNodeCount = 0;
   // Accumulation framebuffers
   MTL::Texture *_accumulationTargets[2] = {nullptr, nullptr};
 
+  struct BoundingSphere {
+    simd::float3 center;
+    float radius;
+  };
+
+  std::vector<Primitive> _allPrimitives;
+  std::vector<bool> _activePrimitive;
+  std::vector<int> _inactiveFrames;
+  std::vector<size_t> _activeToGlobalIndex;
+  std::vector<BoundingSphere> _primitiveBounds;
+
+  bool isInView(const BoundingSphere &b);
+  void syncSceneWithActivePrimitives();
   void rebuildAccelerationStructures();
 };
 

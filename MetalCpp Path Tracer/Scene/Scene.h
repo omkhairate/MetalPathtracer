@@ -78,6 +78,10 @@ public:
         return count;
     }
 
+    const std::vector<Primitive>& getPrimitives() const {
+        return primitives;
+    }
+
     const std::vector<size_t>& getPrimitiveIndices() const {
         return primitiveIndices;
     }
