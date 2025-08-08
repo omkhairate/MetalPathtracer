@@ -26,8 +26,9 @@ struct UniformsData {
   uint64_t frameCount = 0;
   uint64_t totalPrimitiveCount;
   uint64_t tlasNodeCount;
+  uint64_t blasNodeCount;
   uint32_t maxRayDepth;
-  uint32_t _pad;
+  uint32_t debugAS;
 };
 
 inline uint32_t bitm_random() {
@@ -310,7 +311,9 @@ void Renderer::updateUniforms() {
   u.primitiveCount = _pScene->getPrimitiveCount();
   u.triangleCount = _pScene->getTriangleCount();
   u.tlasNodeCount = _tlasNodeCount;
+  u.blasNodeCount = _blasNodeCount;
   u.maxRayDepth = _pScene->maxRayDepth;
+  u.debugAS = InputSystem::debugAS;
 
   _pUniformsBuffer->didModifyRange(NS::Range::Make(0, sizeof(UniformsData)));
 }
