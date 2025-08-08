@@ -6,8 +6,6 @@
 #include <limits>
 #include <algorithm>
 #include <simd/simd.h>
-#include <cmath>
-#include <fstream>
 
 namespace MetalCppPathTracer {
 
@@ -68,36 +66,6 @@ public:
 
     const std::vector<size_t>& getPrimitiveIndices() const {
         return primitiveIndices;
-    }
-
-    void restoreVisiblePrimitives(const simd::float3& camPos,
-                                  const simd::float3& camForward,
-                                  float fovDegrees) {
-        float cosFov = cosf(fovDegrees * 0.5f * (M_PI / 180.0f));
-        auto it = hiddenPrimitives.begin();
-        while (it != hiddenPrimitives.end()) {
-            if (isPrimitiveVisible(*it, camPos, camForward, cosFov)) {
-                primitives.push_back(*it);
-                it = hiddenPrimitives.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
-
-    void cullOffscreenPrimitives(const simd::float3& camPos,
-                                 const simd::float3& camForward,
-                                 float fovDegrees) {
-        float cosFov = cosf(fovDegrees * 0.5f * (M_PI / 180.0f));
-        auto it = primitives.begin();
-        while (it != primitives.end()) {
-            if (!isPrimitiveVisible(*it, camPos, camForward, cosFov)) {
-                hiddenPrimitives.push_back(*it);
-                it = primitives.erase(it);
-            } else {
-                ++it;
-            }
-        }
     }
 
     void buildBVH() {
@@ -233,27 +201,6 @@ public:
         return buffer;
     }
 
-    void dumpBVH(const char* path) const {
-        std::ofstream out(path);
-        for (size_t i = 0; i < bvhNodes.size(); ++i) {
-            const auto& n = bvhNodes[i];
-            out << i << " "
-                << n.boundsMin.x << " " << n.boundsMin.y << " " << n.boundsMin.z << " "
-                << n.boundsMax.x << " " << n.boundsMax.y << " " << n.boundsMax.z << "\n";
-        }
-    }
-
-    static void dumpTLAS(const simd::float4* data, size_t count, const char* path) {
-        std::ofstream out(path);
-        for (size_t i = 0; i < count; ++i) {
-            const simd::float4& mn = data[2 * i + 0];
-            const simd::float4& mx = data[2 * i + 1];
-            out << i << " "
-                << mn.x << " " << mn.y << " " << mn.z << " "
-                << mx.x << " " << mx.y << " " << mx.z << "\n";
-        }
-    }
-
     void createTriangleBuffers(
         std::vector<simd::float3>& outVertices,
         std::vector<simd::uint3>& outIndices)
@@ -277,21 +224,8 @@ public:
 
 private:
     std::vector<Primitive> primitives;
-    std::vector<Primitive> hiddenPrimitives;
     std::vector<size_t> primitiveIndices;
     std::vector<BVHNode> bvhNodes;
-
-    bool isPrimitiveVisible(const Primitive& p,
-                            const simd::float3& camPos,
-                            const simd::float3& camForward,
-                            float cosFov) const {
-        simd::float3 center = p.data0;
-        if (p.type == PrimitiveType::Triangle) {
-            center = (p.data0 + p.data1 + p.data2) / 3.0f;
-        }
-        simd::float3 dir = simd::normalize(center - camPos);
-        return simd::dot(dir, camForward) > cosFov;
-    }
 
     int buildBVHRecursive(size_t start, size_t end) {
         BVHNode node;
