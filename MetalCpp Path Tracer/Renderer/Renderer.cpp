@@ -419,7 +419,11 @@ void Renderer::draw(MTK::View *pView) {
           ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
           : nullptr;
   bool changed = false;
-  const int OFFLOAD_THRESHOLD = 30;
+  // Reduce the number of consecutive empty frames required before a primitive
+  // is offloaded. Lowering this threshold makes BLAS/TLAS rebuilds happen more
+  // frequently so changes in node counts are easier to observe during
+  // animation.
+  const int OFFLOAD_THRESHOLD = 5;
   if (counts) {
     for (size_t i = 0; i < activeCount; ++i) {
       size_t g = _activeToGlobalIndex[i];
@@ -516,8 +520,17 @@ void Renderer::rebuildAccelerationStructures() {
       NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
   delete[] rawIndices;
 
-  // Export acceleration structures for visualization
-  std::filesystem::create_directories("runs");
-  _pScene->exportBVHAsOBJ("runs/blas.obj");
-  _pScene->exportTLASAsOBJ("runs/tlas.obj");
+  // Export acceleration structures for visualization.  Resolve the output
+  // directory relative to the first ancestor that already contains a `runs`
+  // folder so that OBJ files are written to the project's top-level `runs`
+  // directory regardless of the executable's current working directory.
+  namespace fs = std::filesystem;
+  fs::path base = fs::current_path();
+  while (!fs::exists(base / "runs") && base.has_parent_path()) {
+    base = base.parent_path();
+  }
+  fs::path runsPath = base / "runs";
+  fs::create_directories(runsPath);
+  _pScene->exportBVHAsOBJ((runsPath / "blas.obj").string());
+  _pScene->exportTLASAsOBJ((runsPath / "tlas.obj").string());
 }
