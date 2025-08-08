@@ -285,12 +285,30 @@ private:
                             const simd::float3& camPos,
                             const simd::float3& camForward,
                             float cosFov) const {
-        simd::float3 center = p.data0;
-        if (p.type == PrimitiveType::Triangle) {
+        simd::float3 center;
+        float radius = 0.0f;
+
+        if (p.type == PrimitiveType::Sphere) {
+            center = p.data0;
+            radius = p.data1.x;
+        } else {
             center = (p.data0 + p.data1 + p.data2) / 3.0f;
+            float d0 = simd::length(p.data0 - center);
+            float d1 = simd::length(p.data1 - center);
+            float d2 = simd::length(p.data2 - center);
+            radius = std::max({d0, d1, d2});
         }
-        simd::float3 dir = simd::normalize(center - camPos);
-        return simd::dot(dir, camForward) > cosFov;
+
+        simd::float3 toCenter = center - camPos;
+        float dist = simd::length(toCenter);
+        if (dist <= 0.0f) return true;
+
+        simd::float3 dir = toCenter / dist;
+        float cosAngle = simd::dot(dir, camForward);
+        if (cosAngle >= cosFov) return true;
+
+        float sinAngle = sqrtf(std::max(0.0f, 1.0f - cosAngle * cosAngle));
+        return dist * sinAngle <= radius;
     }
 
     int buildBVHRecursive(size_t start, size_t end) {
