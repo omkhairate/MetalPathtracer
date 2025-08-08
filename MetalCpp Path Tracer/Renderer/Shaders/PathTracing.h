@@ -175,6 +175,32 @@ inline intersection firstHitBVH(
                         }
                     }
                 }
+                else if (primitiveType == 2)
+                {
+                    float3 center = p0.xyz;
+                    float3 e1 = p1.xyz;
+                    float3 e2 = p2.xyz;
+                    float3 normal = normalize(cross(e1, e2));
+                    float denom = dot(normal, r.direction);
+                    if (fabs(denom) > 1e-5)
+                    {
+                        float tt = dot(center - r.origin, normal) / denom;
+                        if (tt > 0.0001 && tt < in.t)
+                        {
+                            float3 hitPoint = r.origin + tt * r.direction;
+                            float3 rel = hitPoint - center;
+                            float u = dot(rel, e1) / dot(e1, e1);
+                            float v = dot(rel, e2) / dot(e2, e2);
+                            if (fabs(u) <= 1.0 && fabs(v) <= 1.0)
+                            {
+                                tHit = tt;
+                                hit = hitPoint;
+                                n = normal;
+                                hitThis = true;
+                            }
+                        }
+                    }
+                }
                 
                 if (hitThis && tHit < in.t)
                 {

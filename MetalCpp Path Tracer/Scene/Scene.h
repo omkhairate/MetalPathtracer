@@ -12,7 +12,8 @@ namespace MetalCppPathTracer {
 
 enum class PrimitiveType {
     Sphere = 0,
-    Triangle = 1
+    Triangle = 1,
+    Rectangle = 2
 };
 
 struct Primitive {
@@ -65,6 +66,14 @@ public:
         size_t count = 0;
         for (const auto& p : primitives)
             if (p.type == PrimitiveType::Triangle)
+                count++;
+        return count;
+    }
+
+    size_t getRectangleCount() const {
+        size_t count = 0;
+        for (const auto& p : primitives)
+            if (p.type == PrimitiveType::Rectangle)
                 count++;
         return count;
     }
@@ -243,14 +252,7 @@ private:
         for (size_t i = start; i < end; ++i) {
             const auto& p = primitives[primitiveIndices[i]];
             simd::float3 pMin, pMax;
-            if (p.type == PrimitiveType::Sphere) {
-                float r = p.data1.x;
-                pMin = p.data0 - r;
-                pMax = p.data0 + r;
-            } else {
-                pMin = simd::min(p.data0, simd::min(p.data1, p.data2));
-                pMax = simd::max(p.data0, simd::max(p.data1, p.data2));
-            }
+            primitiveBounds(p, pMin, pMax);
             bMin = simd::min(bMin, pMin);
             bMax = simd::max(bMax, pMax);
         }
@@ -290,14 +292,7 @@ private:
             for (size_t i = start; i < end; ++i) {
                 const auto& p = primitives[primitiveIndices[i]];
                 simd::float3 pMin, pMax;
-                if (p.type == PrimitiveType::Sphere) {
-                    float r = p.data1.x;
-                    pMin = p.data0 - r;
-                    pMax = p.data0 + r;
-                } else {
-                    pMin = simd::min(p.data0, simd::min(p.data1, p.data2));
-                    pMax = simd::max(p.data0, simd::max(p.data1, p.data2));
-                }
+                primitiveBounds(p, pMin, pMax);
                 currMin = simd::min(currMin, pMin);
                 currMax = simd::max(currMax, pMax);
                 leftMin[i - start] = currMin;
@@ -309,14 +304,7 @@ private:
             for (size_t i = end; i-- > start;) {
                 const auto& p = primitives[primitiveIndices[i]];
                 simd::float3 pMin, pMax;
-                if (p.type == PrimitiveType::Sphere) {
-                    float r = p.data1.x;
-                    pMin = p.data0 - r;
-                    pMax = p.data0 + r;
-                } else {
-                    pMin = simd::min(p.data0, simd::min(p.data1, p.data2));
-                    pMax = simd::max(p.data0, simd::max(p.data1, p.data2));
-                }
+                primitiveBounds(p, pMin, pMax);
                 currMin = simd::min(currMin, pMin);
                 currMax = simd::max(currMax, pMax);
                 rightMin[i - start] = currMin;
@@ -362,6 +350,27 @@ private:
     float surfaceArea(const simd::float3& bmin, const simd::float3& bmax) {
         simd::float3 d = bmax - bmin;
         return 2.0f * (d.x * d.y + d.y * d.z + d.z * d.x);
+    }
+
+    void primitiveBounds(const Primitive& p, simd::float3& pMin, simd::float3& pMax) const {
+        if (p.type == PrimitiveType::Sphere) {
+            float r = p.data1.x;
+            pMin = p.data0 - r;
+            pMax = p.data0 + r;
+        } else if (p.type == PrimitiveType::Rectangle) {
+            simd::float3 c = p.data0;
+            simd::float3 e1 = p.data1;
+            simd::float3 e2 = p.data2;
+            simd::float3 c1 = c - e1 - e2;
+            simd::float3 c2 = c - e1 + e2;
+            simd::float3 c3 = c + e1 - e2;
+            simd::float3 c4 = c + e1 + e2;
+            pMin = simd::min(simd::min(c1, c2), simd::min(c3, c4));
+            pMax = simd::max(simd::max(c1, c2), simd::max(c3, c4));
+        } else { // Triangle
+            pMin = simd::min(p.data0, simd::min(p.data1, p.data2));
+            pMax = simd::max(p.data0, simd::max(p.data1, p.data2));
+        }
     }
 };
 

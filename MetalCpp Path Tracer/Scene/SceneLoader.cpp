@@ -108,6 +108,20 @@ void SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
 
             scene->addPrimitive(p);
         }
+        else if (tag == "Rectangle") {
+            Primitive p;
+            p.type = PrimitiveType::Rectangle;
+            p.data0 = parseVec3(e->Attribute("position"));
+            p.data1 = parseVec3(e->Attribute("u"));
+            p.data2 = parseVec3(e->Attribute("v"));
+
+            p.material.albedo = parseVec3(e->Attribute("albedo"));
+            p.material.emissionColor = parseVec3(e->Attribute("emission"));
+            p.material.materialType = e->FloatAttribute("materialType", 0);
+            p.material.emissionPower = e->FloatAttribute("emissionPower", 0);
+
+            scene->addPrimitive(p);
+        }
         else if (tag == "Mesh") {
             std::vector<simd::float3> verts;
             std::vector<simd::uint3> tris;
