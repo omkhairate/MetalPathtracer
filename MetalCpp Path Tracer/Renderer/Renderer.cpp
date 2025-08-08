@@ -297,11 +297,9 @@ bool Renderer::updateCamera() {
 }
 
 void Renderer::updateUniforms() {
-  bool cameraChanged = updateCamera();
-
   UniformsData &u = *((UniformsData *)_pUniformsBuffer->contents());
 
-  if (cameraChanged) {
+  if (updateCamera()) {
     u.frameCount = 0;
     u.randomSeed = {randomFloat(), randomFloat(), randomFloat()};
   } else {
@@ -420,7 +418,4 @@ void Renderer::rebuildAccelerationStructures() {
   _pPrimitiveIndexBuffer->didModifyRange(
       NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
   delete[] rawIndices;
-
-  // Rebuild primitive buffers so restored primitives become visible
-  buildBuffers();
 }
