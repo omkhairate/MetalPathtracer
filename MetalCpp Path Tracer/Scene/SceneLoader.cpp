@@ -152,6 +152,15 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
                 scene->addPrimitive(p);
             }
         }
+        else if (tag == "CameraPath") {
+            for (auto* kf = e->FirstChildElement("Keyframe"); kf; kf = kf->NextSiblingElement("Keyframe")) {
+                CameraKeyframe key{};
+                key.frame = kf->UnsignedAttribute("frame", 0);
+                key.position = parseVec3(kf->Attribute("position"));
+                key.lookAt = parseVec3(kf->Attribute("lookAt"));
+                scene->cameraPath.push_back(key);
+            }
+        }
     }
 
     return true;

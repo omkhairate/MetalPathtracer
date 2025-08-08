@@ -9,6 +9,12 @@
 
 namespace MetalCppPathTracer {
 
+struct CameraKeyframe {
+    uint32_t frame;
+    simd::float3 position;
+    simd::float3 lookAt;
+};
+
 class Scene {
 public:
     Scene();
@@ -39,6 +45,8 @@ public:
     int *createPrimitiveIndexBuffer();
     void createTriangleBuffers(std::vector<simd::float3> &outVertices,
                                std::vector<simd::uint3> &outIndices);
+
+    std::vector<CameraKeyframe> cameraPath;
 
 private:
     std::vector<Primitive> primitives;
