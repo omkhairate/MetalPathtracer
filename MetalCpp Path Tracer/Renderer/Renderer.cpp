@@ -25,6 +25,7 @@ struct UniformsData
     uint64_t triangleCount;
     uint64_t frameCount = 0;
     uint64_t totalPrimitiveCount;
+    uint64_t tlasNodeCount;
 };
 
 inline uint32_t bitm_random()
@@ -65,6 +66,7 @@ Renderer::~Renderer()
     if (_pUniformsBuffer) _pUniformsBuffer->release();
     if (_pBVHBuffer) _pBVHBuffer->release();
     if (_pPrimitiveIndexBuffer) _pPrimitiveIndexBuffer->release();
+    if (_pTLASBuffer) _pTLASBuffer->release();
 
 
     for (int i = 0; i < 2; i++)
@@ -133,6 +135,23 @@ void Renderer::updateVisibleScene()
     );
     _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
     delete[] bvhData; // optional if `createBVHBuffer` allocates on heap
+
+    // Build TLAS buffer from root children
+    size_t tlasCount = 0;
+    simd::float4* tlasData = _pScene->createTLASBuffer(tlasCount);
+    if (_pTLASBuffer) _pTLASBuffer->release();
+    if (tlasData && tlasCount > 0) {
+        _pTLASBuffer = _pDevice->newBuffer(
+            tlasData,
+            sizeof(simd::float4) * tlasCount * 2,
+            MTL::ResourceStorageModeManaged
+        );
+        _pTLASBuffer->didModifyRange(NS::Range::Make(0, _pTLASBuffer->length()));
+    } else {
+        _pTLASBuffer = _pDevice->newBuffer(1, MTL::ResourceStorageModeManaged);
+    }
+    delete[] tlasData;
+    _tlasNodeCount = tlasCount;
 
     // 🆕 Primitive index buffer (for BVH leaf traversal)
     int* rawIndices = _pScene->createPrimitiveIndexBuffer();
@@ -261,6 +280,7 @@ void Renderer::updateUniforms()
 
     u.primitiveCount = _pScene->getPrimitiveCount();
     u.triangleCount = _pScene->getTriangleCount();
+    u.tlasNodeCount = _tlasNodeCount;
 
 
     _pUniformsBuffer->didModifyRange(NS::Range::Make(0, sizeof(UniformsData)));
@@ -293,6 +313,7 @@ void Renderer::draw(MTK::View* pView)
     pEnc->setFragmentBuffer(_pTriangleVertexBuffer, 0, 4);
     pEnc->setFragmentBuffer(_pTriangleIndexBuffer, 0, 5);
     pEnc->setFragmentBuffer(_pPrimitiveIndexBuffer, 0, 6);
+    pEnc->setFragmentBuffer(_pTLASBuffer, 0, 7);
 
 
 

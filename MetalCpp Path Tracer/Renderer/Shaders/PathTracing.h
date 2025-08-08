@@ -76,7 +76,8 @@ inline intersection firstHitBVH(
     thread const ray& r,
     device const float4* bvhNodes,
     device const float4* primitives,
-    device const int* primitiveIndices)
+    device const int* primitiveIndices,
+    int startNode)
 {
     intersection in;
     in.t = INFINITY;
@@ -86,7 +87,7 @@ inline intersection firstHitBVH(
     constexpr int stackSize = 64;
     int stack[stackSize];
     int stackPtr = 0;
-    stack[stackPtr++] = 0; // root
+    stack[stackPtr++] = startNode;
 
     while (stackPtr > 0)
     {
@@ -206,6 +207,8 @@ inline intersection firstHitBVH(
 
 inline float4 rayColor(
     ray r,
+    device const float4* tlasNodes,
+    uint tlasNodeCount,
     device const float4* bvhNodes,
     device const float4* primitives,
     device const float4* materials,
@@ -220,9 +223,25 @@ inline float4 rayColor(
 
     for (size_t depth = 0; depth < maxRayDepth; ++depth)
     {
-        intersection hit = firstHitBVH(r, bvhNodes, primitives, primitiveIndices);
+        intersection bestHit;
+        bestHit.t = INFINITY;
+        bestHit.primitiveId = -1;
 
-        if (hit.primitiveId == -1)
+        for (uint i = 0; i < tlasNodeCount; ++i)
+        {
+            float3 bmin = tlasNodes[2 * i + 0].xyz;
+            float3 bmax = tlasNodes[2 * i + 1].xyz;
+            int startNode = as_type<int>(tlasNodes[2 * i + 0].w);
+
+            if (!intersectAABB(r, bmin, bmax, 0.0001, bestHit.t))
+                continue;
+
+            intersection hit = firstHitBVH(r, bvhNodes, primitives, primitiveIndices, startNode);
+            if (hit.primitiveId != -1 && hit.t < bestHit.t)
+                bestHit = hit;
+        }
+
+        if (bestHit.primitiveId == -1)
         {
             float3 unitDir = normalize(r.direction);
             float t = 0.5 * (unitDir.y + 1.0);
@@ -230,8 +249,7 @@ inline float4 rayColor(
             light += absorption * float4(skyColor, 1.0);
             break;
         }
-
-        int matIndex = hit.primitiveId * 2;
+        int matIndex = bestHit.primitiveId * 2;
         if (matIndex + 1 >= int(primitiveCount) * 2)
             break;
         float4 m0 = materials[matIndex + 0];
@@ -245,12 +263,10 @@ inline float4 rayColor(
         if (emissionPower > 0.0 || materialType == 2)
         {
             light += absorption * float4(emissionColor, 1.0) * emissionPower;
-            // Let it continue bouncing if you want indirect light to propagate
         }
 
-        // Lambertian scatter
-        float3 target = hit.normal + randomUnitVector(seed);
-        r.origin = hit.point + 0.0001 * hit.normal;
+        float3 target = bestHit.normal + randomUnitVector(seed);
+        r.origin = bestHit.point + 0.0001 * bestHit.normal;
         r.direction = normalize(target);
         absorption *= float4(albedo, 1.0);
     }
