@@ -200,6 +200,8 @@ void Renderer::updateVisibleScene() {
   size_t primCount = _allPrimitives.size();
   _activePrimitive.assign(primCount, true);
   _inactiveFrames.assign(primCount, 0);
+  _prevActivePrimitive = _activePrimitive;
+  _asExportFrame = 0;
   _primitiveBounds.resize(primCount);
   for (size_t i = 0; i < primCount; ++i) {
     const Primitive &p = _allPrimitives[i];
@@ -537,12 +539,18 @@ void Renderer::rebuildAccelerationStructures() {
   fs::path runsPath = fs::path(__FILE__).parent_path().parent_path().parent_path() /
                       "runs";
   fs::create_directories(runsPath);
-  std::string blasPath = (runsPath / "blas.obj").string();
-  std::string tlasPath = (runsPath / "tlas.obj").string();
+  std::string frameStr = std::to_string(_asExportFrame);
+  std::string blasPath =
+      (runsPath / ("blas_" + frameStr + ".obj")).string();
+  std::string tlasPath =
+      (runsPath / ("tlas_" + frameStr + ".obj")).string();
   if (!_pScene->exportBVHAsOBJ(blasPath))
     printf("Failed to export BLAS OBJ to %s\n", blasPath.c_str());
   if (!_pScene->exportTLASAsOBJ(tlasPath))
     printf("Failed to export TLAS OBJ to %s\n", tlasPath.c_str());
+  exportActivePrimitiveSnapshot(_asExportFrame);
+  _prevActivePrimitive = _activePrimitive;
+  _asExportFrame++;
 }
 
 void Renderer::writeHeatmapOutputs(const std::vector<uint32_t> &counts) {
@@ -622,6 +630,53 @@ void Renderer::exportHeatmapGeometry(const std::vector<simd::float3> &colors,
       break;
     }
     simd::float3 c = colors[i] * 255.0f;
+    file << pos.x << " " << pos.y << " " << pos.z << " "
+         << (int)std::clamp((int)c.x, 0, 255) << " "
+         << (int)std::clamp((int)c.y, 0, 255) << " "
+         << (int)std::clamp((int)c.z, 0, 255) << "\n";
+  }
+}
+
+void Renderer::exportActivePrimitiveSnapshot(size_t frame) {
+  namespace fs = std::filesystem;
+  fs::path runsPath = fs::path(__FILE__).parent_path().parent_path().parent_path() /
+                      "runs";
+  fs::create_directories(runsPath);
+  std::string path =
+      (runsPath / ("active_" + std::to_string(frame) + ".ply")).string();
+  std::ofstream file(path);
+  if (!file.is_open())
+    return;
+  file << "ply\nformat ascii 1.0\n";
+  file << "element vertex " << _allPrimitives.size() << "\n";
+  file << "property float x\nproperty float y\nproperty float z\n";
+  file << "property uchar red\nproperty uchar green\nproperty uchar blue\n";
+  file << "end_header\n";
+  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
+    const Primitive &p = _allPrimitives[i];
+    simd::float3 pos = {0, 0, 0};
+    switch (p.type) {
+    case PrimitiveType::Sphere:
+      pos = p.sphere.center;
+      break;
+    case PrimitiveType::Triangle:
+      pos = (p.triangle.v0 + p.triangle.v1 + p.triangle.v2) / 3.0f;
+      break;
+    case PrimitiveType::Rectangle:
+      pos = p.rectangle.center;
+      break;
+    }
+    bool prev = _prevActivePrimitive.size() > i ? _prevActivePrimitive[i] : false;
+    bool cur = _activePrimitive[i];
+    simd::float3 c;
+    if (cur && !prev)
+      c = {0, 255, 0};      // newly loaded
+    else if (!cur && prev)
+      c = {255, 0, 0};      // offloaded
+    else if (cur)
+      c = {0, 0, 255};      // active
+    else
+      c = {100, 100, 100};  // inactive
     file << pos.x << " " << pos.y << " " << pos.z << " "
          << (int)std::clamp((int)c.x, 0, 255) << " "
          << (int)std::clamp((int)c.y, 0, 255) << " "
