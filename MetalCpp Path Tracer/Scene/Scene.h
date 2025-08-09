@@ -6,7 +6,6 @@
 #include <vector>
 #include <simd/simd.h>
 #include <cstdint>
-#include <string>
 
 namespace MetalCppPathTracer {
 
@@ -46,9 +45,6 @@ public:
     int *createPrimitiveIndexBuffer();
     void createTriangleBuffers(std::vector<simd::float3> &outVertices,
                                std::vector<simd::uint3> &outIndices);
-
-    bool exportBVHAsOBJ(const std::string &path);
-    bool exportTLASAsOBJ(const std::string &path);
 
     std::vector<CameraKeyframe> cameraPath;
 
