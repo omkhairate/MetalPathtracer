@@ -74,6 +74,14 @@ private:
   void rebuildAccelerationStructures();
 
   size_t _animationFrame = 0;
+
+  void writeHeatmapOutputs(const std::vector<uint32_t> &counts);
+  static simd::float3 heatToColor(float heat);
+  void exportHeatmapImage(const std::vector<simd::float3> &colors,
+                          size_t width, size_t height,
+                          const std::string &path);
+  void exportHeatmapGeometry(const std::vector<simd::float3> &colors,
+                              const std::string &path);
 };
 
 } // namespace MetalCppPathTracer
