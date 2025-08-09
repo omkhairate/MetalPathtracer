@@ -63,11 +63,13 @@ private:
     float radius;
   };
 
-  std::vector<Primitive> _allPrimitives;
-  std::vector<bool> _activePrimitive;
-  std::vector<int> _inactiveFrames;
-  std::vector<size_t> _activeToGlobalIndex;
-  std::vector<BoundingSphere> _primitiveBounds;
+    std::vector<Primitive> _allPrimitives;
+    std::vector<bool> _activePrimitive;
+    std::vector<bool> _prevActivePrimitive;
+    std::vector<int> _inactiveFrames;
+    std::vector<size_t> _activeToGlobalIndex;
+    std::vector<BoundingSphere> _primitiveBounds;
+    size_t _asExportFrame = 0;
 
   bool isInView(const BoundingSphere &b);
   void syncSceneWithActivePrimitives();
@@ -77,12 +79,13 @@ private:
 
   void writeHeatmapOutputs(const std::vector<uint32_t> &counts);
   static simd::float3 heatToColor(float heat);
-  void exportHeatmapImage(const std::vector<simd::float3> &colors,
-                          size_t width, size_t height,
-                          const std::string &path);
-  void exportHeatmapGeometry(const std::vector<simd::float3> &colors,
-                              const std::string &path);
-};
+    void exportHeatmapImage(const std::vector<simd::float3> &colors,
+                            size_t width, size_t height,
+                            const std::string &path);
+    void exportHeatmapGeometry(const std::vector<simd::float3> &colors,
+                                const std::string &path);
+    void exportActivePrimitiveSnapshot(size_t frame);
+  };
 
 } // namespace MetalCppPathTracer
 
