@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <limits>
 #include <cstdio>
-#include <fstream>
 
 namespace MetalCppPathTracer {
 
@@ -199,68 +198,6 @@ int *Scene::createPrimitiveIndexBuffer() {
     return buffer;
 }
 
-static void writeBoxOBJ(std::ofstream &out, const simd::float3 &bmin,
-                        const simd::float3 &bmax, size_t &idx) {
-    simd::float3 v[8] = {
-        {bmin.x, bmin.y, bmin.z}, {bmax.x, bmin.y, bmin.z},
-        {bmax.x, bmax.y, bmin.z}, {bmin.x, bmax.y, bmin.z},
-        {bmin.x, bmin.y, bmax.z}, {bmax.x, bmin.y, bmax.z},
-        {bmax.x, bmax.y, bmax.z}, {bmin.x, bmax.y, bmax.z}};
-    for (int i = 0; i < 8; ++i)
-        out << "v " << v[i].x << " " << v[i].y << " " << v[i].z << "\n";
-
-    // Export faces so that generic OBJ viewers can display the boxes.
-    int faces[6][4] = {{0, 1, 2, 3}, {4, 5, 6, 7}, {0, 1, 5, 4},
-                       {1, 2, 6, 5}, {2, 3, 7, 6}, {3, 0, 4, 7}};
-    for (const auto &f : faces)
-        out << "f " << idx + f[0] << " " << idx + f[1] << " " << idx + f[2]
-            << " " << idx + f[3] << "\n";
-
-    // Also export edges for a wireframe-style visualization.
-    int edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
-                        {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
-    for (const auto &e : edges)
-        out << "l " << idx + e[0] << " " << idx + e[1] << "\n";
-    idx += 8;
-}
-
-bool Scene::exportBVHAsOBJ(const std::string &path) {
-    std::ofstream out(path);
-    if (!out) {
-        std::printf("Failed to open %s for writing\n", path.c_str());
-        return false;
-    }
-    size_t idx = 1;
-    for (const auto &n : bvhNodes) {
-        writeBoxOBJ(out, n.boundsMin, n.boundsMax, idx);
-    }
-    return true;
-}
-
-bool Scene::exportTLASAsOBJ(const std::string &path) {
-    size_t count = 0;
-    simd::float4 *data = createTLASBuffer(count);
-    if (!data) {
-        std::printf("No TLAS data available; skipping export to %s\n", path.c_str());
-        return false;
-    }
-    std::ofstream out(path);
-    if (!out) {
-        std::printf("Failed to open %s for writing\n", path.c_str());
-        delete[] data;
-        return false;
-    }
-    size_t idx = 1;
-    for (size_t i = 0; i < count; ++i) {
-        simd::float3 bmin = simd::make_float3(data[2 * i + 0].x, data[2 * i + 0].y,
-                                             data[2 * i + 0].z);
-        simd::float3 bmax = simd::make_float3(data[2 * i + 1].x, data[2 * i + 1].y,
-                                             data[2 * i + 1].z);
-        writeBoxOBJ(out, bmin, bmax, idx);
-    }
-    delete[] data;
-    return true;
-}
 
 void Scene::createTriangleBuffers(std::vector<simd::float3> &outVertices,
                                   std::vector<simd::uint3> &outIndices) {

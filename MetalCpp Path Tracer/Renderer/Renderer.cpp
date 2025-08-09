@@ -10,10 +10,6 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
-#include <fstream>
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 using namespace MetalCppPathTracer;
 
@@ -200,8 +196,6 @@ void Renderer::updateVisibleScene() {
   size_t primCount = _allPrimitives.size();
   _activePrimitive.assign(primCount, true);
   _inactiveFrames.assign(primCount, 0);
-  _prevActivePrimitive = _activePrimitive;
-  _asExportFrame = 0;
   _primitiveBounds.resize(primCount);
   for (size_t i = 0; i < primCount; ++i) {
     const Primitive &p = _allPrimitives[i];
@@ -431,7 +425,6 @@ void Renderer::draw(MTK::View *pView) {
   // animation.
   const int OFFLOAD_THRESHOLD = 5;
   if (counts) {
-    std::vector<uint32_t> snapshot(counts, counts + activeCount);
     for (size_t i = 0; i < activeCount; ++i) {
       size_t g = _activeToGlobalIndex[i];
       uint32_t c = counts[i];
@@ -448,7 +441,6 @@ void Renderer::draw(MTK::View *pView) {
     }
     _pIntersectionCountBuffer->didModifyRange(
         NS::Range::Make(0, sizeof(uint32_t) * activeCount));
-    writeHeatmapOutputs(snapshot);
   }
 
   for (size_t g = 0; g < _allPrimitives.size(); ++g) {
@@ -527,159 +519,4 @@ void Renderer::rebuildAccelerationStructures() {
   _pPrimitiveIndexBuffer->didModifyRange(
       NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
   delete[] rawIndices;
-
-  // Export acceleration structures for visualization.  Resolve the output
-  // directory relative to this source file so that OBJ files are written to
-  // the project's top-level `runs` directory even when the executable runs
-  // from an external build directory (e.g., Xcode's DerivedData).  Using the
-  // compile-time path avoids relying on the process's current working
-  // directory, which may not be inside the repository and previously resulted
-  // in the files being written elsewhere or not at all.
-  namespace fs = std::filesystem;
-  fs::path runsPath = fs::path(__FILE__).parent_path().parent_path().parent_path() /
-                      "runs";
-  fs::create_directories(runsPath);
-  std::string frameStr = std::to_string(_asExportFrame);
-  std::string blasPath =
-      (runsPath / ("blas_" + frameStr + ".obj")).string();
-  std::string tlasPath =
-      (runsPath / ("tlas_" + frameStr + ".obj")).string();
-  if (!_pScene->exportBVHAsOBJ(blasPath))
-    printf("Failed to export BLAS OBJ to %s\n", blasPath.c_str());
-  if (!_pScene->exportTLASAsOBJ(tlasPath))
-    printf("Failed to export TLAS OBJ to %s\n", tlasPath.c_str());
-  exportActivePrimitiveSnapshot(_asExportFrame);
-  _prevActivePrimitive = _activePrimitive;
-  _asExportFrame++;
-}
-
-void Renderer::writeHeatmapOutputs(const std::vector<uint32_t> &counts) {
-  if (counts.empty())
-    return;
-  uint32_t maxCount = *std::max_element(counts.begin(), counts.end());
-  if (maxCount == 0)
-    return;
-
-  float denom = std::log(1.0f + (float)maxCount);
-  std::vector<simd::float3> colors(counts.size());
-  for (size_t i = 0; i < counts.size(); ++i) {
-    float heat = std::log(1.0f + (float)counts[i]) / denom;
-    colors[i] = heatToColor(heat);
-  }
-
-  namespace fs = std::filesystem;
-  fs::path runsPath = fs::path(__FILE__).parent_path().parent_path().parent_path() /
-                      "runs";
-  fs::create_directories(runsPath);
-  size_t width = (size_t)std::ceil(std::sqrt(colors.size()));
-  size_t height = (colors.size() + width - 1) / width;
-  exportHeatmapImage(colors, width, height, (runsPath / "heatmap.png").string());
-  exportHeatmapGeometry(colors, (runsPath / "heatmap.ply").string());
-}
-
-simd::float3 Renderer::heatToColor(float heat) {
-  if (heat <= 0.5f) {
-    float t = heat * 2.0f;
-    return {0.0f, t, 1.0f - t};
-  } else {
-    float t = (heat - 0.5f) * 2.0f;
-    return {t, 1.0f - t, 0.0f};
-  }
-}
-
-void Renderer::exportHeatmapImage(const std::vector<simd::float3> &colors,
-                                  size_t width, size_t height,
-                                  const std::string &path) {
-  std::vector<unsigned char> pixels(width * height * 3, 0);
-  for (size_t i = 0; i < colors.size(); ++i) {
-    size_t x = i % width;
-    size_t y = i / width;
-    size_t idx = (y * width + x) * 3;
-    simd::float3 c = colors[i] * 255.0f;
-    pixels[idx + 0] = (unsigned char)std::clamp((int)c.x, 0, 255);
-    pixels[idx + 1] = (unsigned char)std::clamp((int)c.y, 0, 255);
-    pixels[idx + 2] = (unsigned char)std::clamp((int)c.z, 0, 255);
-  }
-  stbi_write_png(path.c_str(), (int)width, (int)height, 3, pixels.data(),
-                 (int)(width * 3));
-}
-
-void Renderer::exportHeatmapGeometry(const std::vector<simd::float3> &colors,
-                                     const std::string &path) {
-  std::ofstream file(path);
-  if (!file.is_open())
-    return;
-  file << "ply\nformat ascii 1.0\n";
-  file << "element vertex " << colors.size() << "\n";
-  file << "property float x\nproperty float y\nproperty float z\n";
-  file << "property uchar red\nproperty uchar green\nproperty uchar blue\n";
-  file << "end_header\n";
-  for (size_t i = 0; i < colors.size(); ++i) {
-    size_t g = _activeToGlobalIndex[i];
-    const Primitive &p = _allPrimitives[g];
-    simd::float3 pos = {0, 0, 0};
-    switch (p.type) {
-    case PrimitiveType::Sphere:
-      pos = p.sphere.center;
-      break;
-    case PrimitiveType::Triangle:
-      pos = (p.triangle.v0 + p.triangle.v1 + p.triangle.v2) / 3.0f;
-      break;
-    case PrimitiveType::Rectangle:
-      pos = p.rectangle.center;
-      break;
-    }
-    simd::float3 c = colors[i] * 255.0f;
-    file << pos.x << " " << pos.y << " " << pos.z << " "
-         << (int)std::clamp((int)c.x, 0, 255) << " "
-         << (int)std::clamp((int)c.y, 0, 255) << " "
-         << (int)std::clamp((int)c.z, 0, 255) << "\n";
-  }
-}
-
-void Renderer::exportActivePrimitiveSnapshot(size_t frame) {
-  namespace fs = std::filesystem;
-  fs::path runsPath = fs::path(__FILE__).parent_path().parent_path().parent_path() /
-                      "runs";
-  fs::create_directories(runsPath);
-  std::string path =
-      (runsPath / ("active_" + std::to_string(frame) + ".ply")).string();
-  std::ofstream file(path);
-  if (!file.is_open())
-    return;
-  file << "ply\nformat ascii 1.0\n";
-  file << "element vertex " << _allPrimitives.size() << "\n";
-  file << "property float x\nproperty float y\nproperty float z\n";
-  file << "property uchar red\nproperty uchar green\nproperty uchar blue\n";
-  file << "end_header\n";
-  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
-    const Primitive &p = _allPrimitives[i];
-    simd::float3 pos = {0, 0, 0};
-    switch (p.type) {
-    case PrimitiveType::Sphere:
-      pos = p.sphere.center;
-      break;
-    case PrimitiveType::Triangle:
-      pos = (p.triangle.v0 + p.triangle.v1 + p.triangle.v2) / 3.0f;
-      break;
-    case PrimitiveType::Rectangle:
-      pos = p.rectangle.center;
-      break;
-    }
-    bool prev = _prevActivePrimitive.size() > i ? _prevActivePrimitive[i] : false;
-    bool cur = _activePrimitive[i];
-    simd::float3 c;
-    if (cur && !prev)
-      c = {0, 255, 0};      // newly loaded
-    else if (!cur && prev)
-      c = {255, 0, 0};      // offloaded
-    else if (cur)
-      c = {0, 0, 255};      // active
-    else
-      c = {100, 100, 100};  // inactive
-    file << pos.x << " " << pos.y << " " << pos.z << " "
-         << (int)std::clamp((int)c.x, 0, 255) << " "
-         << (int)std::clamp((int)c.y, 0, 255) << " "
-         << (int)std::clamp((int)c.z, 0, 255) << "\n";
-  }
 }
