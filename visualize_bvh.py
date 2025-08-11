@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Visualize TLAS/BLAS bounding boxes from JSON dumps.
 
-This script recursively scans a directory for `.json` files, expecting each
-file to contain a TLAS or BLAS tree with nodes that include a `"bounds"`
-array ([minX, minY, minZ, maxX, maxY, maxZ]) and optional `"children"`.
+This script recursively scans a directory for `.json` files. Each file may
+contain either a recursive TLAS/BLAS tree with `"bounds"` and `"children"`
+entries, **or** flat `"tlas"` / `"blas"` arrays where each node stores
+`"min"` and `"max"` coordinates.
 
 Usage:
     python visualize_bvh.py /path/to/json/dir
@@ -33,10 +34,22 @@ def load_json_files(base_dir: Path):
     return trees
 
 
-def gather_boxes(node):
-    """Recursively collect bounding boxes from a TLAS/BLAS node."""
-    boxes = []
-    stack = [node]
+def gather_boxes(tree):
+    """Collect bounding boxes from various BVH JSON layouts."""
+    boxes: list[list[float]] = []
+
+    if isinstance(tree, dict) and ("tlas" in tree or "blas" in tree):
+        # New format: flat lists of TLAS/BLAS nodes with "min"/"max" bounds.
+        for key in ("tlas", "blas"):
+            for node in tree.get(key, []):
+                mn = node.get("min")
+                mx = node.get("max")
+                if mn and mx:
+                    boxes.append(mn + mx)
+        return boxes
+
+    # Fallback: recursive traversal expecting "bounds" and optional "children".
+    stack = [tree]
     while stack:
         n = stack.pop()
         box = n.get("bounds")
