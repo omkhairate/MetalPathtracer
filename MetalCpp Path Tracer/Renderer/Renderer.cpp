@@ -414,15 +414,26 @@ void Renderer::draw(MTK::View *pView) {
                        NS::UInteger(0), NS::UInteger(6));
 
   pEnc->endEncoding();
-  pCmd->presentDrawable(pView->currentDrawable());
-  pCmd->commit();
-  pCmd->waitUntilCompleted();
 
+  MTL::BlitCommandEncoder *pBlit = pCmd->blitCommandEncoder();
+  if (_pIntersectionCountBuffer)
+    pBlit->synchronizeResource(_pIntersectionCountBuffer);
+  pBlit->endEncoding();
+
+  pCmd->presentDrawable(pView->currentDrawable());
+  pCmd->addCompletedHandler([
+      this](MTL::CommandBuffer * /*cmd*/) { processIntersectionCounts(); });
+  pCmd->commit();
+
+  pPool->release();
+}
+
+void Renderer::processIntersectionCounts() {
   size_t activeCount = _activeToGlobalIndex.size();
-  uint32_t *counts =
-      _pIntersectionCountBuffer
-          ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
-          : nullptr;
+  uint32_t *counts = _pIntersectionCountBuffer
+                          ? reinterpret_cast<uint32_t *>(
+                                _pIntersectionCountBuffer->contents())
+                          : nullptr;
   bool changed = false;
   // Reduce the number of consecutive empty frames required before a primitive
   // is offloaded. Lowering this threshold makes BLAS/TLAS rebuilds happen more
@@ -473,8 +484,6 @@ void Renderer::draw(MTK::View *pView) {
       ("as_frame_" +
        std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json");
   dumpAccelerationStructure(dumpPath.string());
-
-  pPool->release();
 }
 
 void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
