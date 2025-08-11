@@ -3,6 +3,7 @@
 
 #include <Metal/Metal.hpp>
 #include <MetalKit/MetalKit.hpp>
+#include <cstdint>
 #include <simd/simd.h>
 #include <vector>
 
@@ -63,20 +64,20 @@ private:
     float radius;
   };
 
-    std::vector<Primitive> _allPrimitives;
-    std::vector<bool> _activePrimitive;
-    std::vector<int> _inactiveFrames;
-    std::vector<size_t> _activeToGlobalIndex;
-    std::vector<BoundingSphere> _primitiveBounds;
+  std::vector<Primitive> _allPrimitives;
+  std::vector<bool> _activePrimitive;
+  std::vector<int> _inactiveFrames;
+  std::vector<uint32_t> _lastIntersectionCount;
+  std::vector<size_t> _activeToGlobalIndex;
+  std::vector<BoundingSphere> _primitiveBounds;
 
   bool isInView(const BoundingSphere &b);
   void syncSceneWithActivePrimitives();
   void rebuildAccelerationStructures();
+  void dumpAccelerationStructure(const std::string &path);
 
   size_t _animationFrame = 0;
-
-  
-  };
+};
 
 } // namespace MetalCppPathTracer
 
