@@ -553,7 +553,7 @@ void Renderer::dumpAccelerationStructure(const std::string &path) {
   for (size_t i = 0; i < tlasCount; ++i) {
     simd::float4 bmin = tlasData[2 * i];
     simd::float4 bmax = tlasData[2 * i + 1];
-    int childIndex = *reinterpret_cast<int *>(&bmin.w);
+    int childIndex = reinterpret_cast<const int *>(&bmin)[3];
     out << "    {\"child\":" << childIndex << ",\"min\":[" << bmin.x << ","
         << bmin.y << "," << bmin.z << "],\"max\":[" << bmax.x << "," << bmax.y
         << "," << bmax.z << "]}";
