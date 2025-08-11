@@ -414,19 +414,23 @@ void Renderer::draw(MTK::View *pView) {
 
   pEnc->endEncoding();
   pCmd->presentDrawable(pView->currentDrawable());
+  pCmd->addCompletedHandler([this](MTL::CommandBuffer *cb) {
+    this->processIntersectionCounts();
+  });
   pCmd->commit();
-  pCmd->waitUntilCompleted();
+  pPool->release();
+}
+
+void Renderer::processIntersectionCounts() {
+  NS::AutoreleasePool *pPool = NS::AutoreleasePool::alloc()->init();
 
   size_t activeCount = _activeToGlobalIndex.size();
-  uint32_t *counts =
-      _pIntersectionCountBuffer
-          ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
-          : nullptr;
+  uint32_t *counts = _pIntersectionCountBuffer
+                         ? reinterpret_cast<uint32_t *>(
+                               _pIntersectionCountBuffer->contents())
+                         : nullptr;
   bool changed = false;
-  // Reduce the number of consecutive empty frames required before a primitive
-  // is offloaded. Lowering this threshold makes BLAS/TLAS rebuilds happen more
-  // frequently so changes in node counts are easier to observe during
-  // animation.
+
   const int OFFLOAD_THRESHOLD = 5;
   if (counts) {
     for (size_t i = 0; i < activeCount; ++i) {
@@ -464,6 +468,7 @@ void Renderer::draw(MTK::View *pView) {
     buildBuffers();
     recalculateViewport();
   }
+
   std::string dumpPath =
       "runs/as_frame_" +
       std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json";
