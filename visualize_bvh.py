@@ -1,87 +1,73 @@
 #!/usr/bin/env python3
-"""Visualize TLAS/BLAS bounding boxes from JSON dumps.
+"""Animate BVH node residency across frames.
 
-This script recursively scans a directory for `.json` files. Each file may
-contain either a recursive TLAS/BLAS tree with `"bounds"` and `"children"`
-entries, **or** flat `"tlas"` / `"blas"` arrays where each node stores
-`"min"` and `"max"` coordinates.
+This tool visualises when BVH nodes are loaded or unloaded by animating
+frame-by-frame logs.  Each frame is expected to contain an array of
+nodes with bounding boxes and a boolean ``loaded`` flag:
 
-Usage:
-    python visualize_bvh.py /path/to/json/dir
+{
+    "frame": 0,
+    "nodes": [
+        {"id": 42, "min": [x, y, z], "max": [x, y, z], "loaded": true},
+        ...
+    ]
+}
 
-An interactive Plotly window will open showing wireframe axis-aligned bounding
-boxes for all nodes across all JSON files in the directory.
+The script accepts either a directory containing one JSON file per
+frame or a single JSON file holding a list of frame objects.
+Loaded nodes are drawn in green while unloaded nodes are drawn in red.
+
+Usage::
+
+    python visualize_bvh.py /path/to/frame_logs
+
+A browser window will open showing an animatable 3D view of the BVH.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 import plotly.graph_objects as go
 import plotly.io as pio
 
-# Ensure Plotly opens in a browser window rather than relying on notebook
-# integrations.  This makes the script behave the same whether it is executed
-# from an IDE or a terminal.
+# Force Plotly to open a browser window regardless of environment
 pio.renderers.default = "browser"
 
 
-def load_json_files(base_dir: Path):
-    """Load all JSON files under `base_dir` recursively."""
-    trees = []
-    for root, _dirs, files in os.walk(base_dir):
-        for name in files:
-            if name.endswith(".json"):
-                path = Path(root) / name
-                with path.open("r", encoding="utf-8") as f:
-                    trees.append(json.load(f))
-    return trees
+def _load_frames(path: Path):
+    """Return a list of frame dictionaries from ``path``."""
+    frames = []
+    if path.is_file():
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            frames.extend(data)
+        else:
+            frames.append(data)
+    else:
+        for p in sorted(path.glob("*.json")):
+            with p.open("r", encoding="utf-8") as f:
+                frames.append(json.load(f))
+    return frames
 
 
-def gather_boxes(tree):
-    """Collect TLAS and BLAS bounding boxes from various BVH JSON layouts."""
-    boxes: dict[str, list[list[float]]] = {"tlas": [], "blas": []}
-
-    if isinstance(tree, dict) and ("tlas" in tree or "blas" in tree):
-        # Current format: flat lists of TLAS/BLAS nodes with "min"/"max" bounds.
-        for node in tree.get("tlas", []):
-            mn = node.get("min")
-            mx = node.get("max")
-            if mn and mx:
-                boxes["tlas"].append(mn + mx)
-        for node in tree.get("blas", []):
-            mn = node.get("min")
-            mx = node.get("max")
-            if mn and mx:
-                boxes["blas"].append(mn + mx)
-        return boxes
-
-    # Fallback: recursive traversal expecting "bounds" and optional "children".
-    stack = [tree]
-    while stack:
-        n = stack.pop()
-        box = n.get("bounds")
-        if box:
-            boxes.setdefault("unknown", []).append(box)
-        stack.extend(n.get("children", []))
-    return boxes
-
-
-def add_box_edges(fig, box, color="blue"):
-    """Add a wireframe axis-aligned bounding box to a Plotly figure."""
-    mnx, mny, mnz, mxx, mxy, mxz = box
+def _box_edges(node, color: str):
+    """Return Plotly line traces for a single bounding box."""
+    mnx, mny, mnz = node["min"]
+    mxx, mxy, mxz = node["max"]
     x = [mnx, mxx, mxx, mnx, mnx, mxx, mxx, mnx]
     y = [mny, mny, mxy, mxy, mny, mny, mxy, mxy]
     z = [mnz, mnz, mnz, mnz, mxz, mxz, mxz, mxz]
     edges = [
-        (0, 1), (1, 2), (2, 3), (3, 0),  # bottom
-        (4, 5), (5, 6), (6, 7), (7, 4),  # top
-        (0, 4), (1, 5), (2, 6), (3, 7),  # verticals
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7),
     ]
+    traces = []
     for i, j in edges:
-        fig.add_trace(
+        traces.append(
             go.Scatter3d(
                 x=[x[i], x[j]],
                 y=[y[i], y[j]],
@@ -91,42 +77,75 @@ def add_box_edges(fig, box, color="blue"):
                 showlegend=False,
             )
         )
+    return traces
 
 
-def visualize_boxes(boxes: dict[str, list[list[float]]]):
-    """Render TLAS and BLAS boxes with different colors."""
-    fig = go.Figure()
-    color_map = {"tlas": "red", "blas": "blue", "unknown": "green"}
-    for kind, box_list in boxes.items():
-        for box in box_list:
-            add_box_edges(fig, box, color_map.get(kind, "blue"))
+def _frame_traces(frame):
+    traces = []
+    for node in frame.get("nodes", []):
+        color = "green" if node.get("loaded", True) else "red"
+        traces.extend(_box_edges(node, color))
+    return traces
+
+
+def _visualize(frames):
+    if not frames:
+        raise SystemExit("No frames were loaded")
+
+    fig = go.Figure(
+        data=_frame_traces(frames[0]),
+        frames=[
+            go.Frame(data=_frame_traces(f), name=str(f.get("frame", i)))
+            for i, f in enumerate(frames)
+        ],
+    )
 
     fig.update_layout(
-        title="TLAS / BLAS Bounding Boxes",
+        title="BVH Node Residency",
         scene=dict(
-            xaxis_title="X", yaxis_title="Y", zaxis_title="Z", aspectmode="data"
+            xaxis_title="X",
+            yaxis_title="Y",
+            zaxis_title="Z",
+            aspectmode="data",
         ),
+        updatemenus=[{
+            "type": "buttons",
+            "buttons": [
+                {
+                    "label": "Play",
+                    "method": "animate",
+                    "args": [None, {"frame": {"duration": 500, "redraw": True}, "fromcurrent": True}],
+                },
+                {
+                    "label": "Pause",
+                    "method": "animate",
+                    "args": [[None], {"frame": {"duration": 0}, "mode": "immediate"}],
+                },
+            ],
+        }],
+        sliders=[{
+            "steps": [
+                {
+                    "args": [[str(f.get("frame", i))], {"frame": {"duration": 0}, "mode": "immediate"}],
+                    "label": str(f.get("frame", i)),
+                    "method": "animate",
+                }
+                for i, f in enumerate(frames)
+            ]
+        }],
         height=700,
     )
+
     fig.show()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Visualize TLAS/BLAS bounding boxes from JSON files")
-    parser.add_argument("directory", type=Path, help="Directory containing JSON dumps")
+    parser = argparse.ArgumentParser(description="Animate BVH node residency over time")
+    parser.add_argument("path", type=Path, help="Directory or JSON file containing frame logs")
     args = parser.parse_args()
 
-    trees = load_json_files(args.directory)
-    if not trees:
-        raise SystemExit(f"No JSON files found in {args.directory}")
-
-    all_boxes: dict[str, list[list[float]]] = {"tlas": [], "blas": []}
-    for tree in trees:
-        gathered = gather_boxes(tree)
-        for key, box_list in gathered.items():
-            all_boxes.setdefault(key, []).extend(box_list)
-
-    visualize_boxes(all_boxes)
+    frames = _load_frames(args.path)
+    _visualize(frames)
 
 
 if __name__ == "__main__":
