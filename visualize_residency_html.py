@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Visualize BLAS residency over frames as a simple HTML grid.
+"""Visualise BLAS *primitive* residency over frames as a simple HTML grid.
 
-This script reads TLAS/BLAS dumps produced by the renderer (either a directory
-containing per-frame JSON files or a single JSON file with a list of frames).
-For each frame, BLAS nodes that are resident are shown in green while offloaded
-nodes are shown in red.  The result is written to ``residency.html`` in the
-current directory and can be viewed in any browser.
+The renderer can dump per-frame JSON describing the TLAS/BLAS state and the
+status of individual primitives.  This script consumes either a directory of
+JSON files or a single JSON file containing a list of frames and emits a small
+HTML heatmap.  Each row represents a primitive, each column a frame.  Cells are
+green while the primitive is resident and red once it has been offloaded.  Hover
+over a cell to see the primitive index along with the number of frames since it
+was last hit and the intersection count that led to the decision.
 
 This approach avoids heavy dependencies and produces a compact, fast-to-render
 visualisation suitable for quick inspection.
@@ -18,44 +20,20 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 
-def _nodes_from_dump(data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Convert BLAS dump data into a list of node dictionaries."""
-    nodes = data.get("blas", [])
-    prims = data.get("primitives", [])
-    status: List[Dict[str, Any]] = [None] * len(nodes)  # type: ignore
-
-    def compute(idx: int) -> bool:
-        node = nodes[idx]
-        count = node.get("count", 0)
-        if count > 0:  # Leaf
-            start = node.get("leftFirst", 0)
-            end = start + count
-            active = any(p.get("active", True) for p in prims[start:end])
-        else:  # Internal
-            left = node.get("leftFirst", 0)
-            right = -count
-            l_active = compute(left)
-            r_active = compute(right)
-            active = l_active or r_active
-        status[idx] = {"loaded": active}
-        return active
-
-    if nodes:
-        compute(0)
-    return status
-
-
 def _process_frame(data: Dict[str, Any], frame_index: int) -> Dict[str, Any]:
-    """Normalise various frame dump formats."""
-    if "tlas" in data and "blas" in data:
-        return {
-            "frame": frame_index,
-            "nodes": _nodes_from_dump(data),
-        }
-    if "nodes" in data:
-        data.setdefault("frame", frame_index)
-        return data
-    raise ValueError("Unsupported frame format")
+    """Normalise various frame dump formats and extract primitive data."""
+    frame: Dict[str, Any] = {"frame": frame_index}
+    if "primitives" in data:
+        frame["primitives"] = data["primitives"]
+    elif "tlas" in data and "blas" in data:
+        # Frame contains TLAS/BLAS info but no explicit primitive list.
+        # In that case we assume everything is resident.
+        frame["primitives"] = []
+    elif "nodes" in data:
+        frame["primitives"] = data.get("primitives", [])
+    else:
+        raise ValueError("Unsupported frame format")
+    return frame
 
 
 def _load_frames(path: Path) -> List[Dict[str, Any]]:
@@ -81,16 +59,34 @@ def _write_html(frames: List[Dict[str, Any]], output: Path) -> None:
     if not frames:
         raise SystemExit("No frames were loaded")
 
-    max_nodes = max(len(f.get("nodes", [])) for f in frames)
+    max_prims = max(len(f.get("primitives", [])) for f in frames)
+
+    header_cells = ['<th class="primitive">Prim</th>'] + [
+        f'<th class="frame">{f["frame"]}</th>' for f in frames
+    ]
+    header = "<tr>" + "".join(header_cells) + "</tr>"
+
     rows: List[str] = []
-    for node_idx in range(max_nodes):
+    for prim_idx in range(max_prims):
         cells: List[str] = []
         for frame in frames:
-            nodes = frame.get("nodes", [])
-            loaded = nodes[node_idx]["loaded"] if node_idx < len(nodes) else False
-            cls = "loaded" if loaded else "offloaded"
-            cells.append(f'<td class="{cls}"></td>')
-        rows.append("<tr>" + "".join(cells) + "</tr>")
+            prims = frame.get("primitives", [])
+            if prim_idx < len(prims):
+                prim = prims[prim_idx]
+                active = prim.get("active", True)
+                last_hit = prim.get("lastIntersection", 0)
+                inactive = prim.get("inactiveFrames", 0)
+                title = (
+                    f"primitive {prim_idx}: lastIntersection={last_hit}, "
+                    f"inactiveFrames={inactive}"
+                )
+            else:
+                active = False
+                title = f"primitive {prim_idx}: missing"
+            cls = "loaded" if active else "offloaded"
+            cells.append(f'<td class="{cls}" title="{title}"></td>')
+        row = f"<tr><th class='primitive'>{prim_idx}</th>{''.join(cells)}</tr>"
+        rows.append(row)
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -99,12 +95,17 @@ def _write_html(frames: List[Dict[str, Any]], output: Path) -> None:
 <style>
   table.residency {{ border-collapse: collapse; }}
   table.residency td {{ width: 6px; height: 6px; padding: 0; }}
+  table.residency th.primitive {{ text-align: right; padding-right: 4px; }}
+  table.residency th.frame {{ width: 6px; padding: 0; writing-mode: vertical-rl; font-size: 8px; }}
   td.loaded {{ background: #4caf50; }}
   td.offloaded {{ background: #f44336; }}
 </style>
 </head>
 <body>
 <table class='residency'>
+<thead>
+{header}
+</thead>
 <tbody>
 {''.join(rows)}
 </tbody>
@@ -116,7 +117,7 @@ def _write_html(frames: List[Dict[str, Any]], output: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate a BLAS residency heatmap")
+    parser = argparse.ArgumentParser(description="Generate a primitive residency heatmap")
     parser.add_argument("path", type=Path, help="Directory or JSON file containing frame dumps")
     parser.add_argument("--output", type=Path, default=Path("residency.html"), help="Output HTML file")
     args = parser.parse_args()
