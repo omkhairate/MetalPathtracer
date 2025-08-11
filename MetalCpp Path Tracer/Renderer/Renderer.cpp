@@ -581,12 +581,15 @@ void Renderer::dumpAccelerationStructure(const std::string &path) {
   out << "  ],\n";
 
   out << "  \"primitives\": [\n";
-  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
+  size_t primCount = std::min(
+      { _allPrimitives.size(), _activePrimitive.size(), _inactiveFrames.size(),
+        _lastIntersectionCount.size() });
+  for (size_t i = 0; i < primCount; ++i) {
     out << "    {\"index\":" << i
         << ",\"active\":" << (_activePrimitive[i] ? "true" : "false")
         << ",\"inactiveFrames\":" << _inactiveFrames[i]
         << ",\"lastIntersection\":" << _lastIntersectionCount[i] << "}";
-    if (i + 1 < _allPrimitives.size())
+    if (i + 1 < primCount)
       out << ",\n";
     else
       out << "\n";
