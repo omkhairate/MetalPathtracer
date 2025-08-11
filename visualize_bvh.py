@@ -1,27 +1,22 @@
 #!/usr/bin/env python3
-"""Animate BVH node residency across frames.
+"""Animate TLAS/BLAS residency and ray hits across frames.
 
-This tool visualises when BVH nodes are loaded or unloaded by animating
-frame-by-frame logs.  Each frame is expected to contain an array of
-nodes with bounding boxes and a boolean ``loaded`` flag:
+The renderer emits a JSON dump of the acceleration structure for every
+frame.  Each dump contains TLAS and BLAS nodes together with per–primitive
+activity and intersection counts.  This tool converts those dumps into an
+interactive Plotly visualisation showing which BLAS nodes are resident
+(``green``) or offloaded (``red``).  TLAS nodes are always shown in blue and
+per–node ray hit counts are visualised as coloured markers at node centres.
 
-{
-    "frame": 0,
-    "nodes": [
-        {"id": 42, "min": [x, y, z], "max": [x, y, z], "loaded": true},
-        ...
-    ]
-}
-
-The script accepts either a directory containing one JSON file per
-frame or a single JSON file holding a list of frame objects.
-Loaded nodes are drawn in green while unloaded nodes are drawn in red.
+The script accepts either a directory containing one JSON file per frame
+or a single JSON file holding a list of frame objects.
 
 Usage::
 
-    python visualize_bvh.py /path/to/frame_logs
+    python visualize_bvh.py /path/to/as_dumps
 
-A browser window will open showing an animatable 3D view of the BVH.
+A browser window will open showing an animatable 3D view of the TLAS/BLAS
+along with recorded ray intersections.
 """
 from __future__ import annotations
 
@@ -36,6 +31,54 @@ import plotly.io as pio
 pio.renderers.default = "browser"
 
 
+def _nodes_from_dump(data):
+    """Convert BLAS dump data into a list of node dictionaries."""
+    nodes = data.get("blas", [])
+    prims = data.get("primitives", [])
+    status = [None] * len(nodes)
+
+    def compute(idx):
+        node = nodes[idx]
+        count = node.get("count", 0)
+        if count > 0:  # Leaf
+            start = node.get("leftFirst", 0)
+            end = start + count
+            active = any(p.get("active", True) for p in prims[start:end])
+            hits = sum(p.get("lastIntersection", 0) for p in prims[start:end])
+        else:  # Internal
+            left = node.get("leftFirst", 0)
+            right = -count
+            l_active, l_hits = compute(left)
+            r_active, r_hits = compute(right)
+            active = l_active or r_active
+            hits = l_hits + r_hits
+        status[idx] = {
+            "min": node.get("min", [0, 0, 0]),
+            "max": node.get("max", [0, 0, 0]),
+            "loaded": active,
+            "hits": hits,
+        }
+        return active, hits
+
+    if nodes:
+        compute(0)
+    return status
+
+
+def _process_frame(data, frame_index):
+    """Normalise various frame dump formats."""
+    if "tlas" in data and "blas" in data:
+        return {
+            "frame": frame_index,
+            "tlas": data.get("tlas", []),
+            "nodes": _nodes_from_dump(data),
+        }
+    if "nodes" in data:
+        data.setdefault("frame", frame_index)
+        return data
+    raise ValueError("Unsupported frame format")
+
+
 def _load_frames(path: Path):
     """Return a list of frame dictionaries from ``path``."""
     frames = []
@@ -43,13 +86,14 @@ def _load_frames(path: Path):
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, list):
-            frames.extend(data)
+            for d in data:
+                frames.append(_process_frame(d, len(frames)))
         else:
-            frames.append(data)
+            frames.append(_process_frame(data, 0))
     else:
         for p in sorted(path.glob("*.json")):
             with p.open("r", encoding="utf-8") as f:
-                frames.append(json.load(f))
+                frames.append(_process_frame(json.load(f), len(frames)))
     return frames
 
 
@@ -80,11 +124,43 @@ def _box_edges(node, color: str):
     return traces
 
 
+def _hit_markers(nodes):
+    """Return scatter markers visualising per-node ray hits."""
+    xs, ys, zs, colors, texts = [], [], [], [], []
+    for n in nodes:
+        hits = n.get("hits", 0)
+        if hits <= 0:
+            continue
+        mn = n.get("min", [0, 0, 0])
+        mx = n.get("max", [0, 0, 0])
+        xs.append((mn[0] + mx[0]) / 2)
+        ys.append((mn[1] + mx[1]) / 2)
+        zs.append((mn[2] + mx[2]) / 2)
+        colors.append(hits)
+        texts.append(f"hits: {hits}")
+    if not xs:
+        return []
+    return [
+        go.Scatter3d(
+            x=xs,
+            y=ys,
+            z=zs,
+            mode="markers",
+            marker=dict(size=5, color=colors, colorscale="Viridis", colorbar=dict(title="Ray hits")),
+            text=texts,
+            showlegend=False,
+        )
+    ]
+
+
 def _frame_traces(frame):
     traces = []
+    for node in frame.get("tlas", []):
+        traces.extend(_box_edges(node, "blue"))
     for node in frame.get("nodes", []):
         color = "green" if node.get("loaded", True) else "red"
         traces.extend(_box_edges(node, color))
+    traces.extend(_hit_markers(frame.get("nodes", [])))
     return traces
 
 
@@ -101,7 +177,7 @@ def _visualize(frames):
     )
 
     fig.update_layout(
-        title="BVH Node Residency",
+        title="Acceleration Structure Residency",
         scene=dict(
             xaxis_title="X",
             yaxis_title="Y",
@@ -140,8 +216,8 @@ def _visualize(frames):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Animate BVH node residency over time")
-    parser.add_argument("path", type=Path, help="Directory or JSON file containing frame logs")
+    parser = argparse.ArgumentParser(description="Animate TLAS/BLAS residency over time")
+    parser.add_argument("path", type=Path, help="Directory or JSON file containing frame dumps")
     args = parser.parse_args()
 
     frames = _load_frames(args.path)
