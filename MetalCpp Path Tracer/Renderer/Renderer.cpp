@@ -276,24 +276,32 @@ void Renderer::buildBuffers() {
   }
 
   // ✅ Unified buffer
-  simd::float4 *primitiveBuffer =
-      _pScene->createTransformsBuffer(); // 3 float4s per primitive
-  simd::float4 *materialBuffer =
-      _pScene->createMaterialsBuffer(); // 2 float4s per primitive
+  simd::float4 *primitiveBuffer = nullptr;
+  simd::float4 *materialBuffer = nullptr;
+  if (primitiveCount > 0) {
+    primitiveBuffer =
+        _pScene->createTransformsBuffer(); // 3 float4s per primitive
+    materialBuffer =
+        _pScene->createMaterialsBuffer(); // 2 float4s per primitive
+  }
 
   const size_t primitiveSize = primitiveCount * 3 * sizeof(simd::float4);
   const size_t materialSize = primitiveCount * 2 * sizeof(simd::float4);
 
+  size_t primitiveAlloc = primitiveSize > 0 ? primitiveSize : sizeof(simd::float4);
+  size_t materialAlloc = materialSize > 0 ? materialSize : sizeof(simd::float4);
+
   _pSphereBuffer =
-      _pDevice->newBuffer(primitiveSize, MTL::ResourceStorageModeManaged);
+      _pDevice->newBuffer(primitiveAlloc, MTL::ResourceStorageModeManaged);
   _pSphereMaterialBuffer =
-      _pDevice->newBuffer(materialSize, MTL::ResourceStorageModeManaged);
+      _pDevice->newBuffer(materialAlloc, MTL::ResourceStorageModeManaged);
 
-  memcpy(_pSphereBuffer->contents(), primitiveBuffer, primitiveSize);
-  memcpy(_pSphereMaterialBuffer->contents(), materialBuffer, materialSize);
-
-  _pSphereBuffer->didModifyRange(NS::Range::Make(0, primitiveSize));
-  _pSphereMaterialBuffer->didModifyRange(NS::Range::Make(0, materialSize));
+  if (primitiveCount > 0) {
+    memcpy(_pSphereBuffer->contents(), primitiveBuffer, primitiveSize);
+    memcpy(_pSphereMaterialBuffer->contents(), materialBuffer, materialSize);
+    _pSphereBuffer->didModifyRange(NS::Range::Make(0, primitiveSize));
+    _pSphereMaterialBuffer->didModifyRange(NS::Range::Make(0, materialSize));
+  }
 
   delete[] primitiveBuffer;
   delete[] materialBuffer;
@@ -543,15 +551,20 @@ void Renderer::rebuildAccelerationStructures() {
   }
   delete[] tlasData;
 
-  int *rawIndices = _pScene->createPrimitiveIndexBuffer();
+  size_t indexCount = _pScene->getPrimitiveCount();
+  size_t indexSize = indexCount * sizeof(int);
   if (_pPrimitiveIndexBuffer)
     _pPrimitiveIndexBuffer->release();
-  _pPrimitiveIndexBuffer = _pDevice->newBuffer(
-      rawIndices, sizeof(int) * _pScene->getPrimitiveCount(),
-      MTL::ResourceStorageModeManaged);
-  _pPrimitiveIndexBuffer->didModifyRange(
-      NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
-  delete[] rawIndices;
+  if (indexCount > 0) {
+    int *rawIndices = _pScene->createPrimitiveIndexBuffer();
+    _pPrimitiveIndexBuffer = _pDevice->newBuffer(
+        rawIndices, indexSize, MTL::ResourceStorageModeManaged);
+    _pPrimitiveIndexBuffer->didModifyRange(NS::Range::Make(0, indexSize));
+    delete[] rawIndices;
+  } else {
+    _pPrimitiveIndexBuffer =
+        _pDevice->newBuffer(sizeof(int), MTL::ResourceStorageModeManaged);
+  }
 }
 
 void Renderer::dumpAccelerationStructure(const std::string &path) {
