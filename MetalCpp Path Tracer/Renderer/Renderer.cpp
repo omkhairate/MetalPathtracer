@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <dispatch/dispatch.h>
 #include <simd/simd.h>
 #include <string>
 
@@ -421,8 +422,11 @@ void Renderer::draw(MTK::View *pView) {
   pBlit->endEncoding();
 
   pCmd->presentDrawable(pView->currentDrawable());
-  pCmd->addCompletedHandler([
-      this](MTL::CommandBuffer * /*cmd*/) { processIntersectionCounts(); });
+  pCmd->addCompletedHandler([this](MTL::CommandBuffer * /*cmd*/) {
+    dispatch_async_f(dispatch_get_main_queue(), this, [](void *ctx) {
+      static_cast<Renderer *>(ctx)->processIntersectionCounts();
+    });
+  });
   pCmd->commit();
 
   pPool->release();
@@ -443,6 +447,9 @@ void Renderer::processIntersectionCounts() {
   if (counts) {
     for (size_t i = 0; i < activeCount; ++i) {
       size_t g = _activeToGlobalIndex[i];
+      if (g >= _inactiveFrames.size() || g >= _activePrimitive.size() ||
+          g >= _lastIntersectionCount.size())
+        continue;
       uint32_t c = counts[i];
       _lastIntersectionCount[g] = c;
       if (c > 0) {
