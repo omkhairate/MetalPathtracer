@@ -4,12 +4,14 @@
 #include "InputSystem.h"
 #include "Scene.h"
 #include "SceneLoader.h"
-#include <cstdio>
-#include <simd/simd.h>
-#include <filesystem>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <simd/simd.h>
+#include <string>
 
 using namespace MetalCppPathTracer;
 
@@ -186,16 +188,17 @@ void Renderer::updateVisibleScene() {
     Camera::up = {0, 1, 0};
   }
 
-  printf(
-      "Scene loaded: %zu total primitives (%zu spheres, %zu triangles, %zu rectangles)\n",
-      _pScene->getPrimitiveCount(), _pScene->getSphereCount(),
-      _pScene->getTriangleCount(), _pScene->getRectangleCount());
+  printf("Scene loaded: %zu total primitives (%zu spheres, %zu triangles, %zu "
+         "rectangles)\n",
+         _pScene->getPrimitiveCount(), _pScene->getSphereCount(),
+         _pScene->getTriangleCount(), _pScene->getRectangleCount());
 
   // Store full primitive list and initialize tracking
   _allPrimitives = _pScene->getPrimitives();
   size_t primCount = _allPrimitives.size();
   _activePrimitive.assign(primCount, true);
   _inactiveFrames.assign(primCount, 0);
+  _lastIntersectionCount.assign(primCount, 0);
   _primitiveBounds.resize(primCount);
   for (size_t i = 0; i < primCount; ++i) {
     const Primitive &p = _allPrimitives[i];
@@ -336,7 +339,8 @@ bool Renderer::updateCamera() {
         const auto &k0 = path[i];
         const auto &k1 = path[i + 1];
         if (_animationFrame >= k0.frame && _animationFrame <= k1.frame) {
-          float t = float(_animationFrame - k0.frame) / float(k1.frame - k0.frame);
+          float t =
+              float(_animationFrame - k0.frame) / float(k1.frame - k0.frame);
           Camera::position = k0.position + t * (k1.position - k0.position);
           simd::float3 look = k0.lookAt + t * (k1.lookAt - k0.lookAt);
           Camera::forward = simd::normalize(look - Camera::position);
@@ -428,6 +432,7 @@ void Renderer::draw(MTK::View *pView) {
     for (size_t i = 0; i < activeCount; ++i) {
       size_t g = _activeToGlobalIndex[i];
       uint32_t c = counts[i];
+      _lastIntersectionCount[g] = c;
       if (c > 0) {
         _inactiveFrames[g] = 0;
       } else {
@@ -444,6 +449,8 @@ void Renderer::draw(MTK::View *pView) {
   }
 
   for (size_t g = 0; g < _allPrimitives.size(); ++g) {
+    if (!_activePrimitive[g])
+      _lastIntersectionCount[g] = 0;
     if (!_activePrimitive[g] && isInView(_primitiveBounds[g])) {
       _activePrimitive[g] = true;
       _inactiveFrames[g] = 0;
@@ -457,6 +464,10 @@ void Renderer::draw(MTK::View *pView) {
     buildBuffers();
     recalculateViewport();
   }
+  std::string dumpPath =
+      "runs/as_frame_" +
+      std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json";
+  dumpAccelerationStructure(dumpPath);
 
   pPool->release();
 }
@@ -477,7 +488,8 @@ void Renderer::rebuildAccelerationStructures() {
 
   size_t newBlasCount = _pScene->getBVHNodeCount();
   if (newBlasCount != _blasNodeCount)
-    printf("BLAS node count changed: %zu -> %zu\n", _blasNodeCount, newBlasCount);
+    printf("BLAS node count changed: %zu -> %zu\n", _blasNodeCount,
+           newBlasCount);
   else
     printf("BLAS node count: %zu\n", newBlasCount);
   _blasNodeCount = newBlasCount;
@@ -485,9 +497,9 @@ void Renderer::rebuildAccelerationStructures() {
   simd::float4 *bvhData = _pScene->createBVHBuffer();
   if (_pBVHBuffer)
     _pBVHBuffer->release();
-  _pBVHBuffer = _pDevice->newBuffer(
-      bvhData, sizeof(simd::float4) * newBlasCount * 2,
-      MTL::ResourceStorageModeManaged);
+  _pBVHBuffer =
+      _pDevice->newBuffer(bvhData, sizeof(simd::float4) * newBlasCount * 2,
+                          MTL::ResourceStorageModeManaged);
   _pBVHBuffer->didModifyRange(NS::Range::Make(0, _pBVHBuffer->length()));
   delete[] bvhData;
 
@@ -519,4 +531,62 @@ void Renderer::rebuildAccelerationStructures() {
   _pPrimitiveIndexBuffer->didModifyRange(
       NS::Range::Make(0, sizeof(int) * _pScene->getPrimitiveCount()));
   delete[] rawIndices;
+}
+
+void Renderer::dumpAccelerationStructure(const std::string &path) {
+  std::filesystem::create_directories(
+      std::filesystem::path(path).parent_path());
+  std::ofstream out(path);
+  if (!out.is_open())
+    return;
+
+  out << "{\n";
+
+  size_t tlasCount = 0;
+  simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
+  out << "  \"tlas\": [\n";
+  for (size_t i = 0; i < tlasCount; ++i) {
+    simd::float4 bmin = tlasData[2 * i];
+    simd::float4 bmax = tlasData[2 * i + 1];
+    int childIndex = *reinterpret_cast<int *>(&bmin.w);
+    out << "    {\"child\":" << childIndex << ",\"min\":[" << bmin.x << ","
+        << bmin.y << "," << bmin.z << "],\"max\":[" << bmax.x << "," << bmax.y
+        << "," << bmax.z << "]}";
+    if (i + 1 < tlasCount)
+      out << ",\n";
+    else
+      out << "\n";
+  }
+  out << "  ],\n";
+  delete[] tlasData;
+
+  const auto &nodes = _pScene->getBVHNodes();
+  out << "  \"blas\": [\n";
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    const auto &n = nodes[i];
+    out << "    {\"index\":" << i << ",\"min\":[" << n.boundsMin.x << ","
+        << n.boundsMin.y << "," << n.boundsMin.z << "],\"max\":["
+        << n.boundsMax.x << "," << n.boundsMax.y << "," << n.boundsMax.z
+        << "],\"leftFirst\":" << n.leftFirst << ",\"count\":" << n.count << "}";
+    if (i + 1 < nodes.size())
+      out << ",\n";
+    else
+      out << "\n";
+  }
+  out << "  ],\n";
+
+  out << "  \"primitives\": [\n";
+  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
+    out << "    {\"index\":" << i
+        << ",\"active\":" << (_activePrimitive[i] ? "true" : "false")
+        << ",\"inactiveFrames\":" << _inactiveFrames[i]
+        << ",\"lastIntersection\":" << _lastIntersectionCount[i] << "}";
+    if (i + 1 < _allPrimitives.size())
+      out << ",\n";
+    else
+      out << "\n";
+  }
+  out << "  ]\n";
+
+  out << "}\n";
 }
