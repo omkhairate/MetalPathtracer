@@ -20,6 +20,12 @@ import os
 from pathlib import Path
 
 import plotly.graph_objects as go
+import plotly.io as pio
+
+# Ensure Plotly opens in a browser window rather than relying on notebook
+# integrations.  This makes the script behave the same whether it is executed
+# from an IDE or a terminal.
+pio.renderers.default = "browser"
 
 
 def load_json_files(base_dir: Path):
@@ -35,17 +41,21 @@ def load_json_files(base_dir: Path):
 
 
 def gather_boxes(tree):
-    """Collect bounding boxes from various BVH JSON layouts."""
-    boxes: list[list[float]] = []
+    """Collect TLAS and BLAS bounding boxes from various BVH JSON layouts."""
+    boxes: dict[str, list[list[float]]] = {"tlas": [], "blas": []}
 
     if isinstance(tree, dict) and ("tlas" in tree or "blas" in tree):
-        # New format: flat lists of TLAS/BLAS nodes with "min"/"max" bounds.
-        for key in ("tlas", "blas"):
-            for node in tree.get(key, []):
-                mn = node.get("min")
-                mx = node.get("max")
-                if mn and mx:
-                    boxes.append(mn + mx)
+        # Current format: flat lists of TLAS/BLAS nodes with "min"/"max" bounds.
+        for node in tree.get("tlas", []):
+            mn = node.get("min")
+            mx = node.get("max")
+            if mn and mx:
+                boxes["tlas"].append(mn + mx)
+        for node in tree.get("blas", []):
+            mn = node.get("min")
+            mx = node.get("max")
+            if mn and mx:
+                boxes["blas"].append(mn + mx)
         return boxes
 
     # Fallback: recursive traversal expecting "bounds" and optional "children".
@@ -54,13 +64,13 @@ def gather_boxes(tree):
         n = stack.pop()
         box = n.get("bounds")
         if box:
-            boxes.append(box)
+            boxes.setdefault("unknown", []).append(box)
         stack.extend(n.get("children", []))
     return boxes
 
 
-def add_box_edges(fig, box, **line_kwargs):
-    """Add a wireframe AABB to a Plotly figure."""
+def add_box_edges(fig, box, color="blue"):
+    """Add a wireframe axis-aligned bounding box to a Plotly figure."""
     mnx, mny, mnz, mxx, mxy, mxz = box
     x = [mnx, mxx, mxx, mnx, mnx, mxx, mxx, mnx]
     y = [mny, mny, mxy, mxy, mny, mny, mxy, mxy]
@@ -77,19 +87,25 @@ def add_box_edges(fig, box, **line_kwargs):
                 y=[y[i], y[j]],
                 z=[z[i], z[j]],
                 mode="lines",
-                line=dict(color="blue", width=2, **line_kwargs),
+                line=dict(color=color, width=2),
                 showlegend=False,
             )
         )
 
 
-def visualize_boxes(boxes):
+def visualize_boxes(boxes: dict[str, list[list[float]]]):
+    """Render TLAS and BLAS boxes with different colors."""
     fig = go.Figure()
-    for box in boxes:
-        add_box_edges(fig, box)
+    color_map = {"tlas": "red", "blas": "blue", "unknown": "green"}
+    for kind, box_list in boxes.items():
+        for box in box_list:
+            add_box_edges(fig, box, color_map.get(kind, "blue"))
+
     fig.update_layout(
         title="TLAS / BLAS Bounding Boxes",
-        scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z", aspectmode="data"),
+        scene=dict(
+            xaxis_title="X", yaxis_title="Y", zaxis_title="Z", aspectmode="data"
+        ),
         height=700,
     )
     fig.show()
@@ -104,9 +120,11 @@ def main():
     if not trees:
         raise SystemExit(f"No JSON files found in {args.directory}")
 
-    all_boxes = []
+    all_boxes: dict[str, list[list[float]]] = {"tlas": [], "blas": []}
     for tree in trees:
-        all_boxes.extend(gather_boxes(tree))
+        gathered = gather_boxes(tree)
+        for key, box_list in gathered.items():
+            all_boxes.setdefault(key, []).extend(box_list)
 
     visualize_boxes(all_boxes)
 
