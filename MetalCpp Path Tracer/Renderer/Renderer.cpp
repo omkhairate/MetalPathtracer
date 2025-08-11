@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -464,10 +465,14 @@ void Renderer::draw(MTK::View *pView) {
     buildBuffers();
     recalculateViewport();
   }
-  std::string dumpPath =
-      "runs/as_frame_" +
-      std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json";
-  dumpAccelerationStructure(dumpPath);
+  const char *dirEnv = std::getenv("MPT_RUNS_PATH");
+  std::filesystem::path dumpDir =
+      dirEnv ? dirEnv : std::filesystem::path("runs");
+  std::filesystem::path dumpPath =
+      dumpDir /
+      ("as_frame_" +
+       std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json");
+  dumpAccelerationStructure(dumpPath.string());
 
   pPool->release();
 }
@@ -576,9 +581,9 @@ void Renderer::dumpAccelerationStructure(const std::string &path) {
   out << "  ],\n";
 
   out << "  \"primitives\": [\n";
-  size_t primCount = std::min(
-      { _allPrimitives.size(), _activePrimitive.size(), _inactiveFrames.size(),
-        _lastIntersectionCount.size() });
+  size_t primCount =
+      std::min({_allPrimitives.size(), _activePrimitive.size(),
+                _inactiveFrames.size(), _lastIntersectionCount.size()});
   for (size_t i = 0; i < primCount; ++i) {
     out << "    {\"index\":" << i
         << ",\"active\":" << (_activePrimitive[i] ? "true" : "false")
