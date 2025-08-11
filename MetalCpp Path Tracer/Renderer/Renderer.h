@@ -75,7 +75,6 @@ private:
   void syncSceneWithActivePrimitives();
   void rebuildAccelerationStructures();
   void dumpAccelerationStructure(const std::string &path);
-  void processIntersectionCounts();
 
   size_t _animationFrame = 0;
 };
