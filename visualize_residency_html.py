@@ -82,22 +82,14 @@ def _write_html(frames: List[Dict[str, Any]], output: Path) -> None:
         raise SystemExit("No frames were loaded")
 
     max_nodes = max(len(f.get("nodes", [])) for f in frames)
-
-    # Header row with frame indices
-    header_cells = ["<th></th>"]
-    for idx, frame in enumerate(frames):
-        header_cells.append(f"<th>{frame.get('frame', idx)}</th>")
-    rows: List[str] = ["<tr>" + "".join(header_cells) + "</tr>"]
-
-    # Body rows for each BLAS node
+    rows: List[str] = []
     for node_idx in range(max_nodes):
-        cells: List[str] = [f"<th>{node_idx}</th>"]
-        for frame_idx, frame in enumerate(frames):
+        cells: List[str] = []
+        for frame in frames:
             nodes = frame.get("nodes", [])
             loaded = nodes[node_idx]["loaded"] if node_idx < len(nodes) else False
             cls = "loaded" if loaded else "offloaded"
-            title = f"Node {node_idx}, Frame {frame_idx}: {'loaded' if loaded else 'offloaded'}"
-            cells.append(f'<td class="{cls}" title="{title}"></td>')
+            cells.append(f'<td class="{cls}"></td>')
         rows.append("<tr>" + "".join(cells) + "</tr>")
 
     html = f"""<!DOCTYPE html>
@@ -106,22 +98,15 @@ def _write_html(frames: List[Dict[str, Any]], output: Path) -> None:
 <meta charset='utf-8'>
 <style>
   table.residency {{ border-collapse: collapse; }}
-  table.residency th, table.residency td {{ width: 12px; height: 12px; padding: 0; text-align: center; }}
-  table.residency th {{ font-size: 10px; background: #fafafa; }}
-  .loaded {{ background: #4caf50; }}
-  .offloaded {{ background: #f44336; }}
-  .legend {{ margin-bottom: 1em; }}
-  .legend .swatch {{ display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: middle; }}
+  table.residency td {{ width: 6px; height: 6px; padding: 0; }}
+  td.loaded {{ background: #4caf50; }}
+  td.offloaded {{ background: #f44336; }}
 </style>
 </head>
 <body>
-<div class='legend'>
-  <span class='swatch loaded'></span> Loaded
-  <span class='swatch offloaded' style='margin-left:1em;'></span> Offloaded
-</div>
 <table class='residency'>
 <tbody>
-{'\n'.join(rows)}
+{''.join(rows)}
 </tbody>
 </table>
 </body>
