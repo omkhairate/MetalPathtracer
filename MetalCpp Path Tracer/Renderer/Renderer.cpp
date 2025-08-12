@@ -13,6 +13,7 @@
 #include <fstream>
 #include <simd/simd.h>
 #include <string>
+#include <cstdint>
 
 using namespace MetalCppPathTracer;
 
@@ -116,6 +117,8 @@ Renderer::~Renderer() {
     _pPrimitiveIndexBuffer->release();
   if (_pTLASBuffer)
     _pTLASBuffer->release();
+  if (_pActivePrimitiveBuffer)
+    _pActivePrimitiveBuffer->release();
 
   for (int i = 0; i < 2; i++)
     if (_accumulationTargets[i])
@@ -264,6 +267,10 @@ void Renderer::buildBuffers() {
     _pSphereMaterialBuffer->release();
     _pSphereMaterialBuffer = nullptr;
   }
+  if (_pActivePrimitiveBuffer) {
+    _pActivePrimitiveBuffer->release();
+    _pActivePrimitiveBuffer = nullptr;
+  }
 
   // ✅ Unified buffer
   simd::float4 *primitiveBuffer = nullptr;
@@ -296,6 +303,16 @@ void Renderer::buildBuffers() {
 
   delete[] primitiveBuffer;
   delete[] materialBuffer;
+
+  size_t activeAlloc = primitiveCount > 0 ? primitiveCount : 1;
+  _pActivePrimitiveBuffer =
+      _pDevice->newBuffer(activeAlloc, MTL::ResourceStorageModeManaged);
+  if (primitiveCount > 0) {
+    uint8_t *activeData = (uint8_t *)_pActivePrimitiveBuffer->contents();
+    for (size_t i = 0; i < primitiveCount; ++i)
+      activeData[i] = _activePrimitive[i] ? 1 : 0;
+    _pActivePrimitiveBuffer->didModifyRange(NS::Range::Make(0, primitiveCount));
+  }
 
   // Dummy triangle buffer bindings
   simd::float3 dummyVertex = {0, 0, 0};
@@ -412,6 +429,7 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->setFragmentBuffer(_pTriangleIndexBuffer, 0, 5);
   pEnc->setFragmentBuffer(_pPrimitiveIndexBuffer, 0, 6);
   pEnc->setFragmentBuffer(_pTLASBuffer, 0, 7);
+  pEnc->setFragmentBuffer(_pActivePrimitiveBuffer, 0, 8);
 
   pEnc->setFragmentTexture(_accumulationTargets[0], 0);
   pEnc->setFragmentTexture(_accumulationTargets[1], 1);
@@ -444,10 +462,13 @@ void Renderer::updateLODByDistance() {
   }
 
   if (changed) {
-    syncSceneWithActivePrimitives();
-    rebuildAccelerationStructures();
-    buildBuffers();
-    recalculateViewport();
+    if (_pActivePrimitiveBuffer) {
+      uint8_t *activeData = (uint8_t *)_pActivePrimitiveBuffer->contents();
+      for (size_t i = 0; i < _activePrimitive.size(); ++i)
+        activeData[i] = _activePrimitive[i] ? 1 : 0;
+      _pActivePrimitiveBuffer->didModifyRange(
+          NS::Range::Make(0, _activePrimitive.size()));
+    }
   }
   const char *dirEnv = std::getenv("MPT_RUNS_PATH");
   std::filesystem::path dumpDir =
