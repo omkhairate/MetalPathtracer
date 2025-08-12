@@ -28,6 +28,8 @@ public:
   void draw(MTK::View *pView);
   void drawableSizeWillChange(MTK::View *pView, CGSize size);
 
+  bool hasKeyframes() const;
+
   std::vector<std::pair<simd::float3, float>> _allSpheres;
 
   struct Chunk {

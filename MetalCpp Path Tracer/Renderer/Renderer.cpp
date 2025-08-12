@@ -9,9 +9,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <dispatch/dispatch.h>
 #include <filesystem>
 #include <fstream>
-#include <dispatch/dispatch.h>
 #include <simd/simd.h>
 #include <string>
 
@@ -288,7 +288,8 @@ void Renderer::buildBuffers() {
   const size_t primitiveSize = primitiveCount * 3 * sizeof(simd::float4);
   const size_t materialSize = primitiveCount * 2 * sizeof(simd::float4);
 
-  size_t primitiveAlloc = primitiveSize > 0 ? primitiveSize : sizeof(simd::float4);
+  size_t primitiveAlloc =
+      primitiveSize > 0 ? primitiveSize : sizeof(simd::float4);
   size_t materialAlloc = materialSize > 0 ? materialSize : sizeof(simd::float4);
 
   _pSphereBuffer =
@@ -450,15 +451,15 @@ void Renderer::draw(MTK::View *pView) {
 
 void Renderer::processIntersectionCounts() {
   size_t activeCount = _activeToGlobalIndex.size();
-  uint32_t *counts = _pIntersectionCountBuffer
-                          ? reinterpret_cast<uint32_t *>(
-                                _pIntersectionCountBuffer->contents())
-                          : nullptr;
+  uint32_t *counts =
+      _pIntersectionCountBuffer
+          ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
+          : nullptr;
   bool changed = false;
   // Thrashing control constants
-  const int OFFLOAD_THRESHOLD = 5;       // frames without hits before offload
-  const int REACTIVATE_DELAY = 30;       // cooldown frames before reload
-  const int RELOAD_BUDGET = 8;           // max primitives to reload per frame
+  const int OFFLOAD_THRESHOLD = 5; // frames without hits before offload
+  const int REACTIVATE_DELAY = 30; // cooldown frames before reload
+  const int RELOAD_BUDGET = 8;     // max primitives to reload per frame
   int reloadBudget = RELOAD_BUDGET;
 
   if (counts) {
@@ -527,6 +528,8 @@ void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
   buildTextures();
   recalculateViewport();
 }
+
+bool Renderer::hasKeyframes() const { return !_pScene->cameraPath.empty(); }
 
 void Renderer::rebuildAccelerationStructures() {
   _pScene->buildBVH();
