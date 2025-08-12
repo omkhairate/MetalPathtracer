@@ -3,7 +3,6 @@
 
 #include <metal_raytracing>
 #include <metal_stdlib>
-#include <metal_atomic>
 
 #define M_PI 3.14159265358979323846
 
@@ -201,8 +200,7 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
                        device const float4 *materials, uint primitiveCount,
                        device const int *primitiveIndices,
                        thread uint32_t &seed, uint maxRayDepth,
-                       uint debugAS, uint blasNodeCount,
-                       device atomic_uint *hitCounts) {
+                       uint debugAS, uint blasNodeCount) {
   if (debugAS == 1) {
     for (uint i = 0; i < tlasNodeCount; ++i) {
       float3 bmin = tlasNodes[2 * i + 0].xyz;
@@ -266,8 +264,6 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
       light += absorption * float4(skyColor, 1.0);
       break;
     }
-    atomic_fetch_add_explicit(&hitCounts[bestHit.primitiveId], 1,
-                              memory_order_relaxed);
     int matIndex = bestHit.primitiveId * 2;
     if (matIndex + 1 >= int(primitiveCount) * 2)
       break;
