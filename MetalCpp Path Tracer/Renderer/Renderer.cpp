@@ -9,7 +9,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <dispatch/dispatch.h>
 #include <filesystem>
 #include <fstream>
 #include <simd/simd.h>
@@ -73,23 +72,18 @@ void Renderer::syncSceneWithActivePrimitives() {
   _pScene->cameraPath = cameraPath;
   _pScene->screenSize = size;
   _pScene->maxRayDepth = depth;
-  _activeToGlobalIndex.clear();
   for (size_t i = 0; i < _allPrimitives.size(); ++i) {
     if (_activePrimitive[i]) {
       _pScene->addPrimitive(_allPrimitives[i]);
-      _activeToGlobalIndex.push_back(i);
+    } else {
+      Primitive proxy;
+      proxy.type = PrimitiveType::Sphere;
+      proxy.material = _allPrimitives[i].material;
+      proxy.sphere.center = _primitiveBounds[i].center;
+      proxy.sphere.radius = _primitiveBounds[i].radius;
+      _pScene->addPrimitive(proxy);
     }
   }
-  size_t activeCount = _activeToGlobalIndex.size();
-  if (_pIntersectionCountBuffer)
-    _pIntersectionCountBuffer->release();
-  size_t bytes = sizeof(uint32_t) * activeCount;
-  if (bytes == 0)
-    bytes = sizeof(uint32_t);
-  _pIntersectionCountBuffer =
-      _pDevice->newBuffer(bytes, MTL::ResourceStorageModeManaged);
-  memset(_pIntersectionCountBuffer->contents(), 0, bytes);
-  _pIntersectionCountBuffer->didModifyRange(NS::Range::Make(0, bytes));
 }
 
 Renderer::Renderer(MTL::Device *pDevice)
@@ -122,8 +116,6 @@ Renderer::~Renderer() {
     _pPrimitiveIndexBuffer->release();
   if (_pTLASBuffer)
     _pTLASBuffer->release();
-  if (_pIntersectionCountBuffer)
-    _pIntersectionCountBuffer->release();
 
   for (int i = 0; i < 2; i++)
     if (_accumulationTargets[i])
@@ -199,8 +191,6 @@ void Renderer::updateVisibleScene() {
   _allPrimitives = _pScene->getPrimitives();
   size_t primCount = _allPrimitives.size();
   _activePrimitive.assign(primCount, true);
-  _inactiveFrames.assign(primCount, 0);
-  _lastIntersectionCount.assign(primCount, 0);
   _primitiveBounds.resize(primCount);
   for (size_t i = 0; i < primCount; ++i) {
     const Primitive &p = _allPrimitives[i];
@@ -401,6 +391,7 @@ void Renderer::updateUniforms() {
 }
 
 void Renderer::draw(MTK::View *pView) {
+  updateLODByDistance();
   updateUniforms();
   std::swap(_accumulationTargets[0], _accumulationTargets[1]);
 
@@ -421,7 +412,6 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->setFragmentBuffer(_pTriangleIndexBuffer, 0, 5);
   pEnc->setFragmentBuffer(_pPrimitiveIndexBuffer, 0, 6);
   pEnc->setFragmentBuffer(_pTLASBuffer, 0, 7);
-  pEnc->setFragmentBuffer(_pIntersectionCountBuffer, 0, 8);
 
   pEnc->setFragmentTexture(_accumulationTargets[0], 0);
   pEnc->setFragmentTexture(_accumulationTargets[1], 1);
@@ -432,71 +422,24 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->endEncoding();
 
   MTL::BlitCommandEncoder *pBlit = pCmd->blitCommandEncoder();
-  if (_pIntersectionCountBuffer)
-    pBlit->synchronizeResource(_pIntersectionCountBuffer);
   pBlit->endEncoding();
 
   pCmd->presentDrawable(pView->currentDrawable());
-  pCmd->addCompletedHandler([this](MTL::CommandBuffer * /*cmd*/) {
-    dispatch_async_f(dispatch_get_main_queue(), this, [](void *ctx) {
-      static_cast<Renderer *>(ctx)->processIntersectionCounts();
-    });
-  });
   pCmd->commit();
 
   pPool->release();
 }
 
-void Renderer::processIntersectionCounts() {
-  size_t activeCount = _activeToGlobalIndex.size();
-  uint32_t *counts =
-      _pIntersectionCountBuffer
-          ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
-          : nullptr;
+void Renderer::updateLODByDistance() {
   bool changed = false;
-  // Thrashing control constants
-  const int OFFLOAD_THRESHOLD = 5; // frames without hits before offload
-  const int REACTIVATE_DELAY = 30; // cooldown frames before reload
-  const int RELOAD_BUDGET = 8;     // max primitives to reload per frame
-  int reloadBudget = RELOAD_BUDGET;
-
-  if (counts) {
-    for (size_t i = 0; i < activeCount; ++i) {
-      size_t g = _activeToGlobalIndex[i];
-      if (g >= _inactiveFrames.size() || g >= _activePrimitive.size() ||
-          g >= _lastIntersectionCount.size())
-        continue;
-
-      uint32_t c = counts[i];
-      _lastIntersectionCount[g] = c;
-      if (c > 0) {
-        _inactiveFrames[g] = 0;
-      } else {
-        _inactiveFrames[g]++;
-        if (_inactiveFrames[g] > OFFLOAD_THRESHOLD && _activePrimitive[g]) {
-          _activePrimitive[g] = false;
-          changed = true;
-        }
-      }
-      counts[i] = 0;
-    }
-    _pIntersectionCountBuffer->didModifyRange(
-        NS::Range::Make(0, sizeof(uint32_t) * activeCount));
-  }
-
+  const float FULL_DETAIL_DISTANCE = 50.0f;
   for (size_t g = 0; g < _allPrimitives.size(); ++g) {
-    if (_activePrimitive[g])
-      continue;
-
-    _lastIntersectionCount[g] = 0;
-    _inactiveFrames[g]++;
-
-    if (_inactiveFrames[g] > OFFLOAD_THRESHOLD + REACTIVATE_DELAY &&
-        reloadBudget > 0 && isInView(_primitiveBounds[g])) {
-      _activePrimitive[g] = true;
-      _inactiveFrames[g] = 0;
+    float dist =
+        simd::length(_primitiveBounds[g].center - Camera::position);
+    bool shouldBeActive = dist < FULL_DETAIL_DISTANCE;
+    if (_activePrimitive[g] != shouldBeActive) {
+      _activePrimitive[g] = shouldBeActive;
       changed = true;
-      reloadBudget--;
     }
   }
 
@@ -627,14 +570,11 @@ void Renderer::dumpAccelerationStructure(const std::string &path) {
   out << "  ],\n";
 
   out << "  \"primitives\": [\n";
-  size_t primCount =
-      std::min({_allPrimitives.size(), _activePrimitive.size(),
-                _inactiveFrames.size(), _lastIntersectionCount.size()});
+  size_t primCount = std::min(_allPrimitives.size(), _activePrimitive.size());
   for (size_t i = 0; i < primCount; ++i) {
     out << "    {\"index\":" << i
         << ",\"active\":" << (_activePrimitive[i] ? "true" : "false")
-        << ",\"inactiveFrames\":" << _inactiveFrames[i]
-        << ",\"lastIntersection\":" << _lastIntersectionCount[i] << "}";
+        << "}";
     if (i + 1 < primCount)
       out << ",\n";
     else
