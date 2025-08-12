@@ -506,11 +506,6 @@ void Renderer::rebuildAccelerationStructures() {
   _pScene->buildBVH();
 
   size_t newBlasCount = _pScene->getBVHNodeCount();
-  if (newBlasCount != _blasNodeCount)
-    printf("BLAS node count changed: %zu -> %zu\n", _blasNodeCount,
-           newBlasCount);
-  else
-    printf("BLAS node count: %zu\n", newBlasCount);
   _blasNodeCount = newBlasCount;
 
   simd::float4 *bvhData = _pScene->createBVHBuffer();
@@ -524,11 +519,12 @@ void Renderer::rebuildAccelerationStructures() {
 
   size_t tlasCount = 0;
   simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
-  if (tlasCount != _tlasNodeCount)
-    printf("TLAS node count changed: %zu -> %zu\n", _tlasNodeCount, tlasCount);
-  else
-    printf("TLAS node count: %zu\n", tlasCount);
   _tlasNodeCount = tlasCount;
+  size_t oldActiveCount = _activeNodeCount;
+  _activeNodeCount = _blasNodeCount + _tlasNodeCount;
+  if (_activeNodeCount != oldActiveCount) {
+    printf("Active nodes: %zu\n", _activeNodeCount);
+  }
   if (_pTLASBuffer)
     _pTLASBuffer->release();
   if (tlasData && tlasCount > 0) {
