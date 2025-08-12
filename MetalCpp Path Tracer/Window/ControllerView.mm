@@ -1,5 +1,6 @@
 #import "ControllerView.hpp"
 #import <MetalKit/MetalKit.h>
+#import <AppKit/AppKit.h>
 
 #include "InputSystem.h"
 
@@ -7,9 +8,11 @@
 }
 + (void)load:(CGRect)frame;
 + (ViewBridge *)get;
++ (void)updateFPS:(double)fps;
 @end
 
 ViewBridge *adapter;
+NSTextField *fpsLabel;
 
 MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
     [ViewBridge load: frame];
@@ -22,11 +25,23 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     adapter = [[self alloc] initWithFrame:frame];
     [adapter init];
+    fpsLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 10, 100, 20)];
+    [fpsLabel setBezeled:NO];
+    [fpsLabel setDrawsBackground:NO];
+    [fpsLabel setEditable:NO];
+    [fpsLabel setSelectable:NO];
+    [fpsLabel setTextColor:[NSColor whiteColor]];
+    [fpsLabel setStringValue:@"0 FPS"];
+    [adapter addSubview:fpsLabel];
     [pool release];
 }
 
 + (ViewBridge *)get {
     return adapter;
+}
+
++ (void)updateFPS:(double)fps {
+    [fpsLabel setStringValue:[NSString stringWithFormat:@"%.1f FPS", fps]];
 }
 
 - (id)init {
@@ -80,3 +95,7 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
 }
 
 @end
+
+void MetalCppPathTracer::updateFPS(double fps) {
+    [ViewBridge updateFPS:fps];
+}
