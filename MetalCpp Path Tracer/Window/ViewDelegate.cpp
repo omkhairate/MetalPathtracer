@@ -2,6 +2,8 @@
 #include <AppKit/AppKit.hpp>
 #include <cstdlib>
 #include <chrono>
+#include <cstdio>
+#include <filesystem>
 #include "ControllerView.hpp"
 
 using namespace MetalCppPathTracer;
@@ -11,6 +13,10 @@ ViewDelegate::ViewDelegate(MTL::Device *pDevice)
       _lastTime(std::chrono::steady_clock::now()) {
   if (const char *env = std::getenv("MPT_MAX_FRAMES"))
     _maxFrames = std::strtoul(env, nullptr, 10);
+  if (const char *dump = std::getenv("MPT_DUMP_AS")) {
+    _dumpPath = dump;
+    std::filesystem::create_directories(_dumpPath);
+  }
 }
 
 ViewDelegate::~ViewDelegate() { delete _pRenderer; }
@@ -22,8 +28,15 @@ void ViewDelegate::drawInMTKView(MTK::View *pView) {
   _lastTime = current;
   updateFPS(fps);
   _pRenderer->draw(pView);
+  if (!_dumpPath.empty()) {
+    char file[256];
+    std::snprintf(file, sizeof(file), "%s/frame_%04zu.json", _dumpPath.c_str(),
+                  _frameCount);
+    _pRenderer->dumpAccelerationStructure(file);
+  }
+  ++_frameCount;
   if (_maxFrames > 0 && _pRenderer->hasKeyframes() &&
-      ++_frameCount >= _maxFrames)
+      _frameCount >= _maxFrames)
     NS::Application::sharedApplication()->terminate(nullptr);
 }
 
