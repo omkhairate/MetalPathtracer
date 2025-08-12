@@ -73,6 +73,11 @@ private:
   std::vector<uint32_t> _lastIntersectionCount;
   std::vector<BoundingSphere> _primitiveBounds;
 
+  // Tracks how many primitives are currently active on the GPU.  This is
+  // used purely for diagnostics so we only emit a log message when the
+  // active count actually changes.
+  size_t _activeNodeCount = 0;
+
   bool isInView(const BoundingSphere &b);
   void uploadActivePrimitiveBuffer();
   void rebuildAccelerationStructures();
