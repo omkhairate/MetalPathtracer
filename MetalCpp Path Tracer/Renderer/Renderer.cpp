@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <simd/simd.h>
@@ -116,6 +117,8 @@ Renderer::~Renderer() {
     _pPrimitiveIndexBuffer->release();
   if (_pTLASBuffer)
     _pTLASBuffer->release();
+  if (_pActiveBuffer)
+    _pActiveBuffer->release();
 
   for (int i = 0; i < 2; i++)
     if (_accumulationTargets[i])
@@ -297,6 +300,23 @@ void Renderer::buildBuffers() {
   delete[] primitiveBuffer;
   delete[] materialBuffer;
 
+  // Active mask buffer (1 byte per primitive)
+  if (_pActiveBuffer) {
+    _pActiveBuffer->release();
+    _pActiveBuffer = nullptr;
+  }
+  size_t activeSize = primitiveCount * sizeof(uint8_t);
+  size_t activeAlloc = activeSize > 0 ? activeSize : sizeof(uint8_t);
+  _pActiveBuffer =
+      _pDevice->newBuffer(activeAlloc, MTL::ResourceStorageModeManaged);
+  if (primitiveCount > 0) {
+    std::vector<uint8_t> activeBytes(primitiveCount);
+    for (size_t i = 0; i < primitiveCount; ++i)
+      activeBytes[i] = _activePrimitive[i] ? 1 : 0;
+    memcpy(_pActiveBuffer->contents(), activeBytes.data(), activeSize);
+    _pActiveBuffer->didModifyRange(NS::Range::Make(0, activeSize));
+  }
+
   // Dummy triangle buffer bindings
   simd::float3 dummyVertex = {0, 0, 0};
   simd::uint3 dummyIndex = {0, 0, 0};
@@ -412,6 +432,7 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->setFragmentBuffer(_pTriangleIndexBuffer, 0, 5);
   pEnc->setFragmentBuffer(_pPrimitiveIndexBuffer, 0, 6);
   pEnc->setFragmentBuffer(_pTLASBuffer, 0, 7);
+  pEnc->setFragmentBuffer(_pActiveBuffer, 0, 8);
 
   pEnc->setFragmentTexture(_accumulationTargets[0], 0);
   pEnc->setFragmentTexture(_accumulationTargets[1], 1);
@@ -443,20 +464,14 @@ void Renderer::updateLODByDistance() {
     }
   }
 
-  if (changed) {
-    syncSceneWithActivePrimitives();
-    rebuildAccelerationStructures();
-    buildBuffers();
-    recalculateViewport();
+  if (changed && _pActiveBuffer) {
+    size_t count = _activePrimitive.size();
+    std::vector<uint8_t> activeBytes(count);
+    for (size_t i = 0; i < count; ++i)
+      activeBytes[i] = _activePrimitive[i] ? 1 : 0;
+    memcpy(_pActiveBuffer->contents(), activeBytes.data(), count);
+    _pActiveBuffer->didModifyRange(NS::Range::Make(0, count));
   }
-  const char *dirEnv = std::getenv("MPT_RUNS_PATH");
-  std::filesystem::path dumpDir =
-      dirEnv ? dirEnv : std::filesystem::path("runs");
-  std::filesystem::path dumpPath =
-      dumpDir /
-      ("as_frame_" +
-       std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json");
-  dumpAccelerationStructure(dumpPath.string());
 }
 
 void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {

@@ -61,6 +61,7 @@ inline intersection firstHitBVH(thread const ray &r,
                                 device const float4 *bvhNodes,
                                 device const float4 *primitives,
                                 device const int *primitiveIndices,
+                                device const uchar *activeMask,
                                 int startNode) {
   intersection in;
   in.t = INFINITY;
@@ -88,6 +89,8 @@ inline intersection firstHitBVH(thread const ray &r,
       int count = second;
       for (int i = 0; i < count; ++i) {
         int primIdx = primitiveIndices[leftFirst + i];
+        if (!activeMask[primIdx])
+          continue;
         int base = primIdx * 3;
         float4 p0 = primitives[base + 0];
         float4 p1 = primitives[base + 1];
@@ -199,6 +202,7 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
                        device const float4 *primitives,
                        device const float4 *materials, uint primitiveCount,
                        device const int *primitiveIndices,
+                       device const uchar *activeMask,
                        thread uint32_t &seed, uint maxRayDepth,
                        uint debugAS, uint blasNodeCount) {
   if (debugAS == 1) {
@@ -222,7 +226,8 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
       if (!intersectAABB(r, bmin, bmax, 0.0001, bestHit.t))
         continue;
       intersection hit =
-          firstHitBVH(r, bvhNodes, primitives, primitiveIndices, startNode);
+          firstHitBVH(r, bvhNodes, primitives, primitiveIndices, activeMask,
+                     startNode);
       if (hit.primitiveId != -1 && hit.t < bestHit.t)
         bestHit = hit;
     }
@@ -252,7 +257,8 @@ inline float4 rayColor(ray r, device const float4 *tlasNodes,
         continue;
 
       intersection hit =
-          firstHitBVH(r, bvhNodes, primitives, primitiveIndices, startNode);
+          firstHitBVH(r, bvhNodes, primitives, primitiveIndices, activeMask,
+                     startNode);
       if (hit.primitiveId != -1 && hit.t < bestHit.t)
         bestHit = hit;
     }
