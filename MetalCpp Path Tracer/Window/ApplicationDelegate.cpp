@@ -52,10 +52,9 @@ void ApplicationDelegate::applicationDidFinishLaunching(
   _pMtkView->setClearColor(MTL::ClearColor::Make(0.0, 0.0, 0.0, 1.0));
   _pMtkView->setPreferredFramesPerSecond(60);
   _pMtkView->setEnableSetNeedsDisplay(false);
-  _pMtkView->setPaused(false);
-
   _pViewDelegate = new ViewDelegate(_pDevice);
   _pMtkView->setDelegate(_pViewDelegate);
+  _pMtkView->setPaused(false);
 
   _pWindow->setContentView(_pMtkView);
   _pWindow->setTitle(NS::String::string(
