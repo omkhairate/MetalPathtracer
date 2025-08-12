@@ -447,17 +447,19 @@ void Renderer::processIntersectionCounts() {
                                 _pIntersectionCountBuffer->contents())
                           : nullptr;
   bool changed = false;
-  // Reduce the number of consecutive empty frames required before a primitive
-  // is offloaded. Lowering this threshold makes BLAS/TLAS rebuilds happen more
-  // frequently so changes in node counts are easier to observe during
-  // animation.
-  const int OFFLOAD_THRESHOLD = 5;
+  // Thrashing control constants
+  const int OFFLOAD_THRESHOLD = 5;       // frames without hits before offload
+  const int REACTIVATE_DELAY = 30;       // cooldown frames before reload
+  const int RELOAD_BUDGET = 8;           // max primitives to reload per frame
+  int reloadBudget = RELOAD_BUDGET;
+
   if (counts) {
     for (size_t i = 0; i < activeCount; ++i) {
       size_t g = _activeToGlobalIndex[i];
       if (g >= _inactiveFrames.size() || g >= _activePrimitive.size() ||
           g >= _lastIntersectionCount.size())
         continue;
+
       uint32_t c = counts[i];
       _lastIntersectionCount[g] = c;
       if (c > 0) {
@@ -476,12 +478,18 @@ void Renderer::processIntersectionCounts() {
   }
 
   for (size_t g = 0; g < _allPrimitives.size(); ++g) {
-    if (!_activePrimitive[g])
-      _lastIntersectionCount[g] = 0;
-    if (!_activePrimitive[g] && isInView(_primitiveBounds[g])) {
+    if (_activePrimitive[g])
+      continue;
+
+    _lastIntersectionCount[g] = 0;
+    _inactiveFrames[g]++;
+
+    if (_inactiveFrames[g] > OFFLOAD_THRESHOLD + REACTIVATE_DELAY &&
+        reloadBudget > 0 && isInView(_primitiveBounds[g])) {
       _activePrimitive[g] = true;
       _inactiveFrames[g] = 0;
       changed = true;
+      reloadBudget--;
     }
   }
 
