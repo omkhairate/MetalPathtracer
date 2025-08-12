@@ -333,8 +333,9 @@ void Renderer::buildTextures() {
 }
 
 bool Renderer::updateCamera() {
-  bool changed = false;
   const auto &path = _pScene->cameraPath;
+
+  // If the scene defines a camera path, advance along it every render pass
   if (!path.empty()) {
     if (_animationFrame <= path.front().frame) {
       Camera::position = path.front().position;
@@ -358,18 +359,25 @@ bool Renderer::updateCamera() {
         }
       }
     }
+
     Camera::up = {0, 1, 0};
     InputSystem::clearInputs();
-    changed = true;
-  } else {
-    changed = Camera::transformWithInputs();
+
+    // Rebuild view dependant data for the new camera transform
+    recalculateViewport();
+    rebuildAccelerationStructures();
+
+    // Move to the next keyframe for the following frame
+    _animationFrame++;
+    return true;
   }
+
+  // Fall back to interactive controls when no keyframes are present
+  bool changed = Camera::transformWithInputs();
   if (changed) {
     recalculateViewport();
     rebuildAccelerationStructures();
   }
-  // Advance animation frame after processing camera path
-  _animationFrame++;
   return changed;
 }
 
