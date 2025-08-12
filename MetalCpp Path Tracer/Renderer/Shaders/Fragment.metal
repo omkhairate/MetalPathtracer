@@ -15,7 +15,6 @@ float4 fragment fragmentMain(
     device const uint3* indexBuffer [[buffer(5)]],
     device const int* primitiveIndices [[buffer(6)]],
     device const float4* tlasNodes [[buffer(7)]],
-    device const uchar* activeFlags [[buffer(8)]],
     texture2d<float, access::read_write> lastFrame [[texture(0)]],
     texture2d<float, access::read_write> currentFrame [[texture(1)]])
 
@@ -58,7 +57,6 @@ float4 fragment fragmentMain(
         materials,
         u.primitiveCount,
         primitiveIndices,
-        activeFlags,
         seed,
         u.maxRayDepth,
         u.debugAS,
