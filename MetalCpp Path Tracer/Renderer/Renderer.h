@@ -29,6 +29,8 @@ public:
   void drawableSizeWillChange(MTK::View *pView, CGSize size);
 
   bool hasKeyframes() const;
+  // Toggle visibility of an individual primitive without rebuilding TLAS.
+  void setPrimitiveActive(size_t index, bool active);
 
   std::vector<std::pair<simd::float3, float>> _allSpheres;
 

@@ -452,7 +452,6 @@ void Renderer::draw(MTK::View *pView) {
 }
 
 void Renderer::updateLODByDistance() {
-  bool changed = false;
   // Keep primitives active until the camera is reasonably far away.
   // Using a larger threshold prevents the entire scene from being culled
   // when starting far from the origin.
@@ -464,28 +463,16 @@ void Renderer::updateLODByDistance() {
         _primitiveBounds[g].radius;
     dist = std::max(dist, 0.0f);
     bool shouldBeActive = dist < FULL_DETAIL_DISTANCE;
-    if (_activePrimitive[g] != shouldBeActive) {
-      _activePrimitive[g] = shouldBeActive;
-      changed = true;
-    }
+    if (_activePrimitive[g] != shouldBeActive)
+      setPrimitiveActive(g, shouldBeActive);
     if (_activePrimitive[g])
       activeCount++;
   }
 
   if (activeCount == 0 && !_activePrimitive.empty()) {
     // Ensure at least one primitive remains visible to avoid a blank scene
-    _activePrimitive[0] = true;
-    changed = true;
+    setPrimitiveActive(0, true);
     activeCount = 1;
-  }
-
-  if (changed && _pActiveBuffer) {
-    size_t count = _activePrimitive.size();
-    std::vector<uint8_t> activeBytes(count);
-    for (size_t i = 0; i < count; ++i)
-      activeBytes[i] = _activePrimitive[i] ? 1 : 0;
-    memcpy(_pActiveBuffer->contents(), activeBytes.data(), count);
-    _pActiveBuffer->didModifyRange(NS::Range::Make(0, count));
   }
 }
 
@@ -501,6 +488,19 @@ void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
 }
 
 bool Renderer::hasKeyframes() const { return !_pScene->cameraPath.empty(); }
+
+void Renderer::setPrimitiveActive(size_t index, bool active) {
+  if (index >= _activePrimitive.size())
+    return;
+  if (_activePrimitive[index] == active)
+    return;
+  _activePrimitive[index] = active;
+  if (_pActiveBuffer) {
+    uint8_t *mask = static_cast<uint8_t *>(_pActiveBuffer->contents());
+    mask[index] = active ? 1 : 0;
+    _pActiveBuffer->didModifyRange(NS::Range::Make(index, 1));
+  }
+}
 
 void Renderer::rebuildAccelerationStructures() {
   _pScene->buildBVH();
