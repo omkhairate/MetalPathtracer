@@ -364,9 +364,8 @@ bool Renderer::updateCamera() {
     Camera::up = {0, 1, 0};
     InputSystem::clearInputs();
 
-    // Rebuild view dependant data for the new camera transform
+    // Update view dependent data for the new camera transform
     recalculateViewport();
-    rebuildAccelerationStructures();
 
     // Move to the next keyframe for the following frame
     _animationFrame++;
@@ -377,7 +376,6 @@ bool Renderer::updateCamera() {
   bool changed = Camera::transformWithInputs();
   if (changed) {
     recalculateViewport();
-    rebuildAccelerationStructures();
   }
   return changed;
 }
