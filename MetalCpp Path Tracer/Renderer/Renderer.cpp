@@ -64,32 +64,16 @@ bool Renderer::isInView(const BoundingSphere &b) {
   return angle <= halfFov + radiusAngle;
 }
 
-void Renderer::syncSceneWithActivePrimitives() {
-  // Preserve camera path and settings while refreshing primitive list
-  auto cameraPath = _pScene->cameraPath;
-  auto size = _pScene->screenSize;
-  auto depth = _pScene->maxRayDepth;
-  _pScene->clear();
-  _pScene->cameraPath = cameraPath;
-  _pScene->screenSize = size;
-  _pScene->maxRayDepth = depth;
-  _activeToGlobalIndex.clear();
-  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
-    if (_activePrimitive[i]) {
-      _pScene->addPrimitive(_allPrimitives[i]);
-      _activeToGlobalIndex.push_back(i);
-    }
-  }
-  size_t activeCount = _activeToGlobalIndex.size();
-  if (_pIntersectionCountBuffer)
-    _pIntersectionCountBuffer->release();
-  size_t bytes = sizeof(uint32_t) * activeCount;
-  if (bytes == 0)
-    bytes = sizeof(uint32_t);
-  _pIntersectionCountBuffer =
-      _pDevice->newBuffer(bytes, MTL::ResourceStorageModeManaged);
-  memset(_pIntersectionCountBuffer->contents(), 0, bytes);
-  _pIntersectionCountBuffer->didModifyRange(NS::Range::Make(0, bytes));
+void Renderer::uploadActivePrimitiveBuffer() {
+  if (!_pActivePrimitiveBuffer)
+    return;
+  uint32_t *data =
+      reinterpret_cast<uint32_t *>(_pActivePrimitiveBuffer->contents());
+  size_t count = _activePrimitive.size();
+  for (size_t i = 0; i < count; ++i)
+    data[i] = _activePrimitive[i] ? 1u : 0u;
+  _pActivePrimitiveBuffer->didModifyRange(
+      NS::Range::Make(0, sizeof(uint32_t) * count));
 }
 
 Renderer::Renderer(MTL::Device *pDevice)
@@ -124,6 +108,8 @@ Renderer::~Renderer() {
     _pTLASBuffer->release();
   if (_pIntersectionCountBuffer)
     _pIntersectionCountBuffer->release();
+  if (_pActivePrimitiveBuffer)
+    _pActivePrimitiveBuffer->release();
 
   for (int i = 0; i < 2; i++)
     if (_accumulationTargets[i])
@@ -217,8 +203,22 @@ void Renderer::updateVisibleScene() {
       _primitiveBounds[i] = {p.rectangle.center, r};
     }
   }
+  if (_pIntersectionCountBuffer)
+    _pIntersectionCountBuffer->release();
+  size_t bytes = sizeof(uint32_t) * primCount;
+  if (bytes == 0)
+    bytes = sizeof(uint32_t);
+  _pIntersectionCountBuffer =
+      _pDevice->newBuffer(bytes, MTL::ResourceStorageModeManaged);
+  memset(_pIntersectionCountBuffer->contents(), 0, bytes);
+  _pIntersectionCountBuffer->didModifyRange(NS::Range::Make(0, bytes));
 
-  syncSceneWithActivePrimitives();
+  if (_pActivePrimitiveBuffer)
+    _pActivePrimitiveBuffer->release();
+  _pActivePrimitiveBuffer =
+      _pDevice->newBuffer(bytes, MTL::ResourceStorageModeManaged);
+  uploadActivePrimitiveBuffer();
+
   rebuildAccelerationStructures();
   buildBuffers();
 }
@@ -421,7 +421,8 @@ void Renderer::draw(MTK::View *pView) {
   pEnc->setFragmentBuffer(_pTriangleIndexBuffer, 0, 5);
   pEnc->setFragmentBuffer(_pPrimitiveIndexBuffer, 0, 6);
   pEnc->setFragmentBuffer(_pTLASBuffer, 0, 7);
-  pEnc->setFragmentBuffer(_pIntersectionCountBuffer, 0, 8);
+  pEnc->setFragmentBuffer(_pActivePrimitiveBuffer, 0, 8);
+  pEnc->setFragmentBuffer(_pIntersectionCountBuffer, 0, 9);
 
   pEnc->setFragmentTexture(_accumulationTargets[0], 0);
   pEnc->setFragmentTexture(_accumulationTargets[1], 1);
@@ -448,11 +449,11 @@ void Renderer::draw(MTK::View *pView) {
 }
 
 void Renderer::processIntersectionCounts() {
-  size_t activeCount = _activeToGlobalIndex.size();
-  uint32_t *counts =
-      _pIntersectionCountBuffer
-          ? reinterpret_cast<uint32_t *>(_pIntersectionCountBuffer->contents())
-          : nullptr;
+  size_t primCount = _allPrimitives.size();
+  uint32_t *counts = _pIntersectionCountBuffer
+                         ? reinterpret_cast<uint32_t *>(
+                               _pIntersectionCountBuffer->contents())
+                         : nullptr;
   bool changed = false;
   // Thrashing control constants
   const int OFFLOAD_THRESHOLD = 5; // frames without hits before offload
@@ -461,51 +462,41 @@ void Renderer::processIntersectionCounts() {
   int reloadBudget = RELOAD_BUDGET;
 
   if (counts) {
-    for (size_t i = 0; i < activeCount; ++i) {
-      size_t g = _activeToGlobalIndex[i];
+    for (size_t g = 0; g < primCount; ++g) {
       if (g >= _inactiveFrames.size() || g >= _activePrimitive.size() ||
           g >= _lastIntersectionCount.size())
         continue;
 
-      uint32_t c = counts[i];
+      uint32_t c = counts[g];
       _lastIntersectionCount[g] = c;
-      if (c > 0) {
-        _inactiveFrames[g] = 0;
+      if (_activePrimitive[g]) {
+        if (c > 0) {
+          _inactiveFrames[g] = 0;
+        } else {
+          _inactiveFrames[g]++;
+          if (_inactiveFrames[g] > OFFLOAD_THRESHOLD) {
+            _activePrimitive[g] = false;
+            changed = true;
+          }
+        }
       } else {
         _inactiveFrames[g]++;
-        if (_inactiveFrames[g] > OFFLOAD_THRESHOLD && _activePrimitive[g]) {
-          _activePrimitive[g] = false;
+        if (_inactiveFrames[g] > OFFLOAD_THRESHOLD + REACTIVATE_DELAY &&
+            reloadBudget > 0 && isInView(_primitiveBounds[g])) {
+          _activePrimitive[g] = true;
+          _inactiveFrames[g] = 0;
           changed = true;
+          reloadBudget--;
         }
       }
-      counts[i] = 0;
+      counts[g] = 0;
     }
     _pIntersectionCountBuffer->didModifyRange(
-        NS::Range::Make(0, sizeof(uint32_t) * activeCount));
+        NS::Range::Make(0, sizeof(uint32_t) * primCount));
   }
 
-  for (size_t g = 0; g < _allPrimitives.size(); ++g) {
-    if (_activePrimitive[g])
-      continue;
-
-    _lastIntersectionCount[g] = 0;
-    _inactiveFrames[g]++;
-
-    if (_inactiveFrames[g] > OFFLOAD_THRESHOLD + REACTIVATE_DELAY &&
-        reloadBudget > 0 && isInView(_primitiveBounds[g])) {
-      _activePrimitive[g] = true;
-      _inactiveFrames[g] = 0;
-      changed = true;
-      reloadBudget--;
-    }
-  }
-
-  if (changed) {
-    syncSceneWithActivePrimitives();
-    rebuildAccelerationStructures();
-    buildBuffers();
-    recalculateViewport();
-  }
+  if (changed)
+    uploadActivePrimitiveBuffer();
   const char *dirEnv = std::getenv("MPT_RUNS_PATH");
   std::filesystem::path dumpDir =
       dirEnv ? dirEnv : std::filesystem::path("runs");
