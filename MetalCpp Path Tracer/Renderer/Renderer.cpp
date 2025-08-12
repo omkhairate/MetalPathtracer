@@ -454,6 +454,7 @@ void Renderer::draw(MTK::View *pView) {
 void Renderer::updateLODByDistance() {
   bool changed = false;
   const float FULL_DETAIL_DISTANCE = 50.0f;
+  size_t activeCount = 0;
   for (size_t g = 0; g < _allPrimitives.size(); ++g) {
     float dist =
         simd::length(_primitiveBounds[g].center - Camera::position);
@@ -462,6 +463,15 @@ void Renderer::updateLODByDistance() {
       _activePrimitive[g] = shouldBeActive;
       changed = true;
     }
+    if (_activePrimitive[g])
+      activeCount++;
+  }
+
+  if (activeCount == 0 && !_activePrimitive.empty()) {
+    // Ensure at least one primitive remains visible to avoid a blank scene
+    _activePrimitive[0] = true;
+    changed = true;
+    activeCount = 1;
   }
 
   if (changed && _pActiveBuffer) {
