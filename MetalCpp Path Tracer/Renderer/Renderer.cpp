@@ -83,6 +83,8 @@ Renderer::Renderer(MTL::Device *pDevice)
   Camera::reset();
 
   updateVisibleScene();
+  rebuildAccelerationStructures();
+  buildBuffers();
   buildShaders();
   buildTextures();
 
@@ -188,6 +190,8 @@ void Renderer::updateVisibleScene() {
   _inactiveFrames.assign(primCount, 0);
   _lastIntersectionCount.assign(primCount, 0);
   _primitiveBounds.resize(primCount);
+  _activeNodeCount = primCount;
+  printf("Active node count: %zu\n", _activeNodeCount);
   for (size_t i = 0; i < primCount; ++i) {
     const Primitive &p = _allPrimitives[i];
     if (p.type == PrimitiveType::Sphere) {
@@ -218,9 +222,6 @@ void Renderer::updateVisibleScene() {
   _pActivePrimitiveBuffer =
       _pDevice->newBuffer(bytes, MTL::ResourceStorageModeManaged);
   uploadActivePrimitiveBuffer();
-
-  rebuildAccelerationStructures();
-  buildBuffers();
 }
 
 void Renderer::recalculateViewport() {
@@ -495,16 +496,16 @@ void Renderer::processIntersectionCounts() {
         NS::Range::Make(0, sizeof(uint32_t) * primCount));
   }
 
-  if (changed)
+  if (changed) {
     uploadActivePrimitiveBuffer();
-  const char *dirEnv = std::getenv("MPT_RUNS_PATH");
-  std::filesystem::path dumpDir =
-      dirEnv ? dirEnv : std::filesystem::path("runs");
-  std::filesystem::path dumpPath =
-      dumpDir /
-      ("as_frame_" +
-       std::to_string(_animationFrame > 0 ? _animationFrame - 1 : 0) + ".json");
-  dumpAccelerationStructure(dumpPath.string());
+    size_t newActive = std::count(_activePrimitive.begin(),
+                                  _activePrimitive.end(), true);
+    if (newActive != _activeNodeCount) {
+      printf("Active node count changed: %zu -> %zu\n", _activeNodeCount,
+             newActive);
+      _activeNodeCount = newActive;
+    }
+  }
 }
 
 void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {

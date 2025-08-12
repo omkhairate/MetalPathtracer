@@ -1,0 +1,13 @@
+<Scene width="1280" height="720" maxRayDepth="4">
+  <!-- Five spheres spread along the X axis so the camera movement triggers
+       primitives entering and leaving the view frustum. -->
+  <Sphere position="0,0,-5" radius="1" albedo="1,0,0" emission="0,0,0" materialType="0" emissionPower="0"/>
+  <Sphere position="5,0,-5" radius="1" albedo="0,1,0" emission="0,0,0" materialType="0" emissionPower="0"/>
+  <Sphere position="10,0,-5" radius="1" albedo="0,0,1" emission="0,0,0" materialType="0" emissionPower="0"/>
+  <Sphere position="15,0,-5" radius="1" albedo="1,1,0" emission="0,0,0" materialType="0" emissionPower="0"/>
+  <Sphere position="20,0,-5" radius="1" albedo="0,1,1" emission="0,0,0" materialType="0" emissionPower="0"/>
+  <CameraPath>
+    <Keyframe frame="0" position="0,0,0" lookAt="0,0,-5"/>
+    <Keyframe frame="120" position="20,0,0" lookAt="20,0,-5"/>
+  </CameraPath>
+</Scene>
