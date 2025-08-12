@@ -60,6 +60,7 @@ private:
   MTL::Buffer *_pActiveBuffer = nullptr;
   size_t _blasNodeCount = 0;
   size_t _tlasNodeCount = 0;
+  size_t _activeNodeCount = 0;
   // Accumulation framebuffers
   MTL::Texture *_accumulationTargets[2] = {nullptr, nullptr};
 
