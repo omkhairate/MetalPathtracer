@@ -457,17 +457,14 @@ void Renderer::updateLODByDistance() {
   // when starting far from the origin.
   const float FULL_DETAIL_DISTANCE = 250.0f;
   size_t activeCount = 0;
-  bool changed = false;
   for (size_t g = 0; g < _allPrimitives.size(); ++g) {
     float dist =
         simd::length(_primitiveBounds[g].center - Camera::position) -
         _primitiveBounds[g].radius;
     dist = std::max(dist, 0.0f);
     bool shouldBeActive = dist < FULL_DETAIL_DISTANCE;
-    if (_activePrimitive[g] != shouldBeActive) {
+    if (_activePrimitive[g] != shouldBeActive)
       setPrimitiveActive(g, shouldBeActive);
-      changed = true;
-    }
     if (_activePrimitive[g])
       activeCount++;
   }
@@ -476,12 +473,6 @@ void Renderer::updateLODByDistance() {
     // Ensure at least one primitive remains visible to avoid a blank scene
     setPrimitiveActive(0, true);
     activeCount = 1;
-    changed = true;
-  }
-
-  if (changed) {
-    syncSceneWithActivePrimitives();
-    rebuildAccelerationStructures();
   }
 }
 
