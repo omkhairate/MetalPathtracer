@@ -32,6 +32,9 @@ public:
   // Toggle visibility of an individual primitive without rebuilding TLAS.
   void setPrimitiveActive(size_t index, bool active);
 
+  // Dump acceleration structure to a JSON file for debugging.
+  void dumpAccelerationStructure(const std::string &path);
+
   std::vector<std::pair<simd::float3, float>> _allSpheres;
 
   struct Chunk {
@@ -75,7 +78,6 @@ private:
 
   bool isInView(const BoundingSphere &b);
   void rebuildAccelerationStructures();
-  void dumpAccelerationStructure(const std::string &path);
   void updateLODByDistance();
 
   size_t _animationFrame = 0;
