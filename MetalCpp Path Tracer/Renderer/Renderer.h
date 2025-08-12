@@ -56,6 +56,7 @@ private:
   MTL::Buffer *_pPrimitiveIndexBuffer = nullptr;
   MTL::Buffer *_pTLASBuffer = nullptr;
   MTL::Buffer *_pIntersectionCountBuffer = nullptr;
+  MTL::Buffer *_pActivePrimitiveBuffer = nullptr;
   size_t _blasNodeCount = 0;
   size_t _tlasNodeCount = 0;
   // Accumulation framebuffers
@@ -70,11 +71,10 @@ private:
   std::vector<bool> _activePrimitive;
   std::vector<int> _inactiveFrames;
   std::vector<uint32_t> _lastIntersectionCount;
-  std::vector<size_t> _activeToGlobalIndex;
   std::vector<BoundingSphere> _primitiveBounds;
 
   bool isInView(const BoundingSphere &b);
-  void syncSceneWithActivePrimitives();
+  void uploadActivePrimitiveBuffer();
   void rebuildAccelerationStructures();
   void dumpAccelerationStructure(const std::string &path);
   void processIntersectionCounts();
