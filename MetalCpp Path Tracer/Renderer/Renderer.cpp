@@ -64,29 +64,6 @@ bool Renderer::isInView(const BoundingSphere &b) {
   return angle <= halfFov + radiusAngle;
 }
 
-void Renderer::syncSceneWithActivePrimitives() {
-  // Preserve camera path and settings while refreshing primitive list
-  auto cameraPath = _pScene->cameraPath;
-  auto size = _pScene->screenSize;
-  auto depth = _pScene->maxRayDepth;
-  _pScene->clear();
-  _pScene->cameraPath = cameraPath;
-  _pScene->screenSize = size;
-  _pScene->maxRayDepth = depth;
-  for (size_t i = 0; i < _allPrimitives.size(); ++i) {
-    if (_activePrimitive[i]) {
-      _pScene->addPrimitive(_allPrimitives[i]);
-    } else {
-      Primitive proxy;
-      proxy.type = PrimitiveType::Sphere;
-      proxy.material = _allPrimitives[i].material;
-      proxy.sphere.center = _primitiveBounds[i].center;
-      proxy.sphere.radius = _primitiveBounds[i].radius;
-      _pScene->addPrimitive(proxy);
-    }
-  }
-}
-
 Renderer::Renderer(MTL::Device *pDevice)
     : _pDevice(pDevice->retain()), _pScene(new Scene()) {
   _pCommandQueue = _pDevice->newCommandQueue();
@@ -211,7 +188,6 @@ void Renderer::updateVisibleScene() {
     }
   }
 
-  syncSceneWithActivePrimitives();
   rebuildAccelerationStructures();
   buildBuffers();
 }
@@ -474,6 +450,12 @@ void Renderer::updateLODByDistance() {
     setPrimitiveActive(0, true);
     activeCount = 1;
   }
+
+  size_t newActiveNodes = _tlasNodeCount + activeCount;
+  if (newActiveNodes != _activeNodeCount) {
+    _activeNodeCount = newActiveNodes;
+    printf("Active nodes: %zu\n", _activeNodeCount);
+  }
 }
 
 void Renderer::drawableSizeWillChange(MTK::View *pView, CGSize size) {
@@ -521,7 +503,11 @@ void Renderer::rebuildAccelerationStructures() {
   simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
   _tlasNodeCount = tlasCount;
   size_t oldActiveCount = _activeNodeCount;
-  _activeNodeCount = _blasNodeCount + _tlasNodeCount;
+  size_t activePrim = 0;
+  for (bool a : _activePrimitive)
+    if (a)
+      activePrim++;
+  _activeNodeCount = _tlasNodeCount + activePrim;
   if (_activeNodeCount != oldActiveCount) {
     printf("Active nodes: %zu\n", _activeNodeCount);
   }

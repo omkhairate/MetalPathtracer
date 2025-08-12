@@ -74,7 +74,6 @@ private:
   std::vector<BoundingSphere> _primitiveBounds;
 
   bool isInView(const BoundingSphere &b);
-  void syncSceneWithActivePrimitives();
   void rebuildAccelerationStructures();
   void dumpAccelerationStructure(const std::string &path);
   void updateLODByDistance();
