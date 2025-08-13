@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <chrono>
 #include <simd/simd.h>
 #include <string>
 
@@ -378,6 +379,7 @@ void Renderer::updateUniforms() {
 
   u.primitiveCount = _pScene->getPrimitiveCount();
   u.triangleCount = _pScene->getTriangleCount();
+  u.totalPrimitiveCount = _allPrimitives.size();
   u.tlasNodeCount = _tlasNodeCount;
   u.blasNodeCount = _blasNodeCount;
   u.maxRayDepth = _pScene->maxRayDepth;
@@ -389,11 +391,15 @@ void Renderer::updateUniforms() {
 void Renderer::draw(MTK::View *pView) {
   updateLODByDistance();
   updateUniforms();
+  beginFrameMetrics();
   std::swap(_accumulationTargets[0], _accumulationTargets[1]);
 
   NS::AutoreleasePool *pPool = NS::AutoreleasePool::alloc()->init();
 
   MTL::CommandBuffer *pCmd = _pCommandQueue->commandBuffer();
+  pCmd->addCompletedHandler([this](MTL::CommandBuffer *cmd) {
+    this->completeFrameMetrics(cmd);
+  });
   MTL::RenderPassDescriptor *pRpd = pView->currentRenderPassDescriptor();
   MTL::RenderCommandEncoder *pEnc = pCmd->renderCommandEncoder(pRpd);
 
@@ -502,6 +508,7 @@ void Renderer::rebuildAccelerationStructures() {
   size_t tlasCount = 0;
   simd::float4 *tlasData = _pScene->createTLASBuffer(tlasCount);
   _tlasNodeCount = tlasCount;
+  _totalNodeCount = _tlasNodeCount + _allPrimitives.size();
   size_t oldActiveCount = _activeNodeCount;
   size_t activePrim = 0;
   for (bool a : _activePrimitive)
@@ -600,4 +607,27 @@ void Renderer::dumpAccelerationStructure(const std::string &path) {
 double Renderer::currentGPUMemoryMB() const {
   return static_cast<double>(_pDevice->currentAllocatedSize()) /
          (1024.0 * 1024.0);
+}
+
+void Renderer::beginFrameMetrics() {
+  _cpuStart = std::chrono::high_resolution_clock::now();
+  _lastRayCount = static_cast<size_t>(Camera::screenSize.x * Camera::screenSize.y);
+}
+
+void Renderer::completeFrameMetrics(MTL::CommandBuffer *pCmd) {
+  auto cpuEnd = std::chrono::high_resolution_clock::now();
+  _lastCPUTime = std::chrono::duration<double>(cpuEnd - _cpuStart).count();
+  _lastGPUTime = pCmd->GPUEndTime() - pCmd->GPUStartTime();
+  if (_lastGPUTime > 0.0) {
+    _lastRaysPerSecond = static_cast<double>(_lastRayCount) / _lastGPUTime;
+  } else {
+    _lastRaysPerSecond = 0.0;
+  }
+  size_t offloaded = _totalNodeCount > _activeNodeCount ?
+                         _totalNodeCount - _activeNodeCount :
+                         0;
+  printf(
+      "Nodes active: %zu offloaded: %zu CPU: %.3f ms GPU: %.3f ms Rays/s: %.2f\n",
+      _activeNodeCount, offloaded, _lastCPUTime * 1000.0,
+      _lastGPUTime * 1000.0, _lastRaysPerSecond);
 }
