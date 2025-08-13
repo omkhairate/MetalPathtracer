@@ -4,6 +4,7 @@
 #include <Metal/Metal.hpp>
 #include <MetalKit/MetalKit.hpp>
 #include <cstdint>
+#include <chrono>
 #include <simd/simd.h>
 #include <vector>
 
@@ -67,6 +68,7 @@ private:
   size_t _blasNodeCount = 0;
   size_t _tlasNodeCount = 0;
   size_t _activeNodeCount = 0;
+  size_t _totalNodeCount = 0;
   // Accumulation framebuffers
   MTL::Texture *_accumulationTargets[2] = {nullptr, nullptr};
 
@@ -82,6 +84,15 @@ private:
   bool isInView(const BoundingSphere &b);
   void rebuildAccelerationStructures();
   void updateLODByDistance();
+
+  // Performance metrics
+  void beginFrameMetrics();
+  void completeFrameMetrics(MTL::CommandBuffer *pCmd);
+  std::chrono::high_resolution_clock::time_point _cpuStart;
+  double _lastCPUTime = 0.0;
+  double _lastGPUTime = 0.0;
+  double _lastRaysPerSecond = 0.0;
+  size_t _lastRayCount = 0;
 
   size_t _animationFrame = 0;
 };
