@@ -596,3 +596,8 @@ void Renderer::dumpAccelerationStructure(const std::string &path) {
 
   out << "}\n";
 }
+
+double Renderer::currentGPUMemoryMB() const {
+  return static_cast<double>(_pDevice->currentAllocatedSize()) /
+         (1024.0 * 1024.0);
+}
