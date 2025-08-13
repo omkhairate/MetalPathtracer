@@ -39,6 +39,13 @@ public:
   // Return the amount of GPU memory currently allocated by the device in MB.
   double currentGPUMemoryMB() const;
 
+  // Expose last recorded performance metrics.
+  double lastCPUTime() const;
+  double lastGPUTime() const;
+  double lastRaysPerSecond() const;
+  size_t activeNodeCount() const;
+  size_t totalNodeCount() const;
+
   std::vector<std::pair<simd::float3, float>> _allSpheres;
 
   struct Chunk {

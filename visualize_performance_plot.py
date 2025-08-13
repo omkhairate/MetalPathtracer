@@ -23,8 +23,10 @@ from plotly.subplots import make_subplots
 pio.renderers.default = "browser"
 
 
-def _load_perf_csv(path: Path) -> Tuple[List[int], Dict[str, List[float]]]:
-    """Return frame numbers and metric columns from ``path``."""
+def _load_perf_csv(
+    path: Path,
+) -> Tuple[List[int], Dict[str, List[float]], List[int] | None, List[int] | None]:
+    """Return frame numbers, metric columns, and node counts from ``path``."""
     frames: List[int] = []
     metrics: Dict[str, List[float]] = {}
     with path.open("r", encoding="utf-8") as f:
@@ -35,7 +37,9 @@ def _load_perf_csv(path: Path) -> Tuple[List[int], Dict[str, List[float]]]:
                 if key == "frame":
                     continue
                 metrics.setdefault(key, []).append(float(value))
-    return frames, metrics
+    active = metrics.pop("active_nodes", None)
+    offloaded = metrics.pop("offloaded_nodes", None)
+    return frames, metrics, active, offloaded
 
 
 # The following helpers are adapted from ``visualize_active_nodes_plot.py``
@@ -96,15 +100,18 @@ def _count_active_nodes(frames: List[Dict[str, Any]]) -> List[int]:
 
 
 def _create_figure(
-    frames: List[int], metrics: Dict[str, List[float]], active_nodes: List[int] | None
+    frames: List[int],
+    metrics: Dict[str, List[float]],
+    active_nodes: List[int] | None,
+    offloaded_nodes: List[int] | None,
 ) -> go.Figure:
-    if active_nodes is not None:
+    if active_nodes is not None or offloaded_nodes is not None:
         fig = make_subplots(specs=[[{"secondary_y": True}]])
     else:
         fig = go.Figure()
 
     for name, values in metrics.items():
-        if active_nodes is not None:
+        if active_nodes is not None or offloaded_nodes is not None:
             fig.add_trace(
                 go.Scatter(x=frames, y=values, mode="lines+markers", name=name),
                 secondary_y=False,
@@ -122,8 +129,19 @@ def _create_figure(
             ),
             secondary_y=True,
         )
+    if offloaded_nodes is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(offloaded_nodes))),
+                y=offloaded_nodes,
+                mode="lines+markers",
+                name="offloaded_nodes",
+            ),
+            secondary_y=True,
+        )
+    if active_nodes is not None or offloaded_nodes is not None:
         fig.update_yaxes(title_text="Performance", secondary_y=False)
-        fig.update_yaxes(title_text="Active nodes", secondary_y=True)
+        fig.update_yaxes(title_text="Nodes", secondary_y=True)
     else:
         fig.update_yaxes(title_text="Value")
 
@@ -158,11 +176,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    frames, metrics = _load_perf_csv(args.csv)
-    active = None
-    if args.as_path is not None:
+    frames, metrics, csv_active, csv_offloaded = _load_perf_csv(args.csv)
+    active = csv_active
+    offloaded = csv_offloaded
+    if active is None and args.as_path is not None:
         active = _count_active_nodes(_load_frames(args.as_path))
-    fig = _create_figure(frames, metrics, active)
+    fig = _create_figure(frames, metrics, active, offloaded)
     fig.write_html(args.output, auto_open=not args.no_open)
     print(f"Wrote {args.output}")
 
