@@ -9,10 +9,12 @@
 + (void)load:(CGRect)frame;
 + (ViewBridge *)get;
 + (void)updateFPS:(double)fps;
++ (void)updateMemory:(double)mem;
 @end
 
 ViewBridge *adapter;
 NSTextField *fpsLabel;
+NSTextField *memoryLabel;
 
 MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
     [ViewBridge load: frame];
@@ -34,6 +36,15 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
     [fpsLabel setTextColor:[NSColor whiteColor]];
     [fpsLabel setStringValue:@"0 FPS"];
     [adapter addSubview:fpsLabel];
+    memoryLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, frame.size.height - 55, 120, 20)];
+    [memoryLabel setBezeled:NO];
+    [memoryLabel setDrawsBackground:YES];
+    [memoryLabel setBackgroundColor:[NSColor colorWithCalibratedWhite:0 alpha:0.5]];
+    [memoryLabel setEditable:NO];
+    [memoryLabel setSelectable:NO];
+    [memoryLabel setTextColor:[NSColor whiteColor]];
+    [memoryLabel setStringValue:@"0 MB"];
+    [adapter addSubview:memoryLabel];
     [pool release];
 }
 
@@ -43,6 +54,10 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
 
 + (void)updateFPS:(double)fps {
     [fpsLabel setStringValue:[NSString stringWithFormat:@"%.1f FPS", fps]];
+}
+
++ (void)updateMemory:(double)mem {
+    [memoryLabel setStringValue:[NSString stringWithFormat:@"%.1f MB", mem]];
 }
 
 - (id)init {
@@ -99,4 +114,8 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
 
 void MetalCppPathTracer::updateFPS(double fps) {
     [ViewBridge updateFPS:fps];
+}
+
+void MetalCppPathTracer::updateMemoryUsage(double memoryMB) {
+    [ViewBridge updateMemory:memoryMB];
 }
