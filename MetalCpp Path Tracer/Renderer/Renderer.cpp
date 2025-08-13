@@ -631,3 +631,9 @@ void Renderer::completeFrameMetrics(MTL::CommandBuffer *pCmd) {
       _activeNodeCount, offloaded, _lastCPUTime * 1000.0,
       _lastGPUTime * 1000.0, _lastRaysPerSecond);
 }
+
+double Renderer::lastCPUTime() const { return _lastCPUTime; }
+double Renderer::lastGPUTime() const { return _lastGPUTime; }
+double Renderer::lastRaysPerSecond() const { return _lastRaysPerSecond; }
+size_t Renderer::activeNodeCount() const { return _activeNodeCount; }
+size_t Renderer::totalNodeCount() const { return _totalNodeCount; }
