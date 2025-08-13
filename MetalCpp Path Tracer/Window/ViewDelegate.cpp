@@ -1,12 +1,12 @@
 #include "ViewDelegate.h"
+#include "ControllerView.hpp"
 #include <AppKit/AppKit.hpp>
-#include <cstdlib>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
-#include "ControllerView.hpp"
-#include <mach/mach.h>
 #include <fstream>
+#include <mach/mach.h>
 
 using namespace MetalCppPathTracer;
 
@@ -24,15 +24,20 @@ ViewDelegate::ViewDelegate(MTL::Device *pDevice)
       _lastTime(std::chrono::steady_clock::now()) {
   if (const char *env = std::getenv("MPT_MAX_FRAMES"))
     _maxFrames = std::strtoul(env, nullptr, 10);
-  if (const char *dump = std::getenv("MPT_DUMP_AS")) {
-    _dumpPath = dump;
+  if (const char *runs = std::getenv("MPT_RUNS_PATH")) {
+    std::filesystem::path base(runs);
+    std::filesystem::create_directories(base);
+
+    _dumpPath = (base / "as").string();
     std::filesystem::create_directories(_dumpPath);
-  }
-  if (const char *gpu = std::getenv("MPT_GPU_MEM_LOG")) {
-    std::filesystem::path p(gpu);
-    if (p.has_parent_path())
-      std::filesystem::create_directories(p.parent_path());
-    _gpuMemLog.open(p);
+
+    std::filesystem::path perf = base / "perf.csv";
+    _perfLog.open(perf);
+    if (_perfLog.is_open())
+      _perfLog << "frame,fps\n";
+
+    std::filesystem::path gpu = base / "gpu_mem.csv";
+    _gpuMemLog.open(gpu);
     if (_gpuMemLog.is_open())
       _gpuMemLog << "frame,gpu_memory_mb\n";
   }
@@ -41,17 +46,22 @@ ViewDelegate::ViewDelegate(MTL::Device *pDevice)
 ViewDelegate::~ViewDelegate() {
   if (_gpuMemLog.is_open())
     _gpuMemLog.close();
+  if (_perfLog.is_open())
+    _perfLog.close();
   delete _pRenderer;
 }
 
 void ViewDelegate::drawInMTKView(MTK::View *pView) {
   auto current = std::chrono::steady_clock::now();
-  double fps =
-      1.0 / std::chrono::duration<double>(current - _lastTime).count();
+  double fps = 1.0 / std::chrono::duration<double>(current - _lastTime).count();
   _lastTime = current;
   updateFPS(fps);
   updateMemoryUsage(getMemoryUsageMB());
   _pRenderer->draw(pView);
+  if (_perfLog.is_open()) {
+    _perfLog << _frameCount << "," << fps << "\n";
+    _perfLog.flush();
+  }
   if (_gpuMemLog.is_open()) {
     _gpuMemLog << _frameCount << "," << _pRenderer->currentGPUMemoryMB()
                << "\n";
@@ -64,8 +74,7 @@ void ViewDelegate::drawInMTKView(MTK::View *pView) {
     _pRenderer->dumpAccelerationStructure(file);
   }
   ++_frameCount;
-  if (_maxFrames > 0 && _pRenderer->hasKeyframes() &&
-      _frameCount >= _maxFrames)
+  if (_maxFrames > 0 && _pRenderer->hasKeyframes() && _frameCount >= _maxFrames)
     NS::Application::sharedApplication()->terminate(nullptr);
 }
 
