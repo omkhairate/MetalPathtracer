@@ -25,9 +25,10 @@ MTK::View *MetalCppPathTracer::ControllerView::get(CGRect frame) {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     adapter = [[self alloc] initWithFrame:frame];
     [adapter init];
-    fpsLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 10, 100, 20)];
+    fpsLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, frame.size.height - 30, 120, 20)];
     [fpsLabel setBezeled:NO];
-    [fpsLabel setDrawsBackground:NO];
+    [fpsLabel setDrawsBackground:YES];
+    [fpsLabel setBackgroundColor:[NSColor colorWithCalibratedWhite:0 alpha:0.5]];
     [fpsLabel setEditable:NO];
     [fpsLabel setSelectable:NO];
     [fpsLabel setTextColor:[NSColor whiteColor]];
