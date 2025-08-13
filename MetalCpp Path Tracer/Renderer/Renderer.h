@@ -35,6 +35,9 @@ public:
   // Dump acceleration structure to a JSON file for debugging.
   void dumpAccelerationStructure(const std::string &path);
 
+  // Return the amount of GPU memory currently allocated by the device in MB.
+  double currentGPUMemoryMB() const;
+
   std::vector<std::pair<simd::float3, float>> _allSpheres;
 
   struct Chunk {

@@ -6,6 +6,7 @@
 #include <filesystem>
 #include "ControllerView.hpp"
 #include <mach/mach.h>
+#include <fstream>
 
 using namespace MetalCppPathTracer;
 
@@ -27,9 +28,21 @@ ViewDelegate::ViewDelegate(MTL::Device *pDevice)
     _dumpPath = dump;
     std::filesystem::create_directories(_dumpPath);
   }
+  if (const char *gpu = std::getenv("MPT_GPU_MEM_LOG")) {
+    std::filesystem::path p(gpu);
+    if (p.has_parent_path())
+      std::filesystem::create_directories(p.parent_path());
+    _gpuMemLog.open(p);
+    if (_gpuMemLog.is_open())
+      _gpuMemLog << "frame,gpu_memory_mb\n";
+  }
 }
 
-ViewDelegate::~ViewDelegate() { delete _pRenderer; }
+ViewDelegate::~ViewDelegate() {
+  if (_gpuMemLog.is_open())
+    _gpuMemLog.close();
+  delete _pRenderer;
+}
 
 void ViewDelegate::drawInMTKView(MTK::View *pView) {
   auto current = std::chrono::steady_clock::now();
@@ -39,6 +52,11 @@ void ViewDelegate::drawInMTKView(MTK::View *pView) {
   updateFPS(fps);
   updateMemoryUsage(getMemoryUsageMB());
   _pRenderer->draw(pView);
+  if (_gpuMemLog.is_open()) {
+    _gpuMemLog << _frameCount << "," << _pRenderer->currentGPUMemoryMB()
+               << "\n";
+    _gpuMemLog.flush();
+  }
   if (!_dumpPath.empty()) {
     char file[256];
     std::snprintf(file, sizeof(file), "%s/frame_%04zu.json", _dumpPath.c_str(),
