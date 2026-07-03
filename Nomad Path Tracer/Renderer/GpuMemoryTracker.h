@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 
 namespace NomadPathTracer {
@@ -24,15 +25,19 @@ public:
     size_t totalTracked = 0;
   };
 
-  void trackResource(const void *resource, size_t bytes, Category category);
+  void trackResource(const void *resource, size_t bytes, Category category,
+                     const char *label = nullptr);
   void releaseResource(const void *resource);
   Snapshot snapshot() const;
   size_t bytesForCategory(Category category) const;
+  std::unordered_map<std::string, size_t>
+  bytesByLabelForCategory(Category category) const;
 
 private:
   struct Entry {
     size_t bytes = 0;
     Category category = Category::Scratch;
+    std::string label;
   };
 
   std::unordered_map<const void *, Entry> _entries;

@@ -1707,7 +1707,7 @@ MTL::Buffer *Renderer::allocateBuffer(NS::UInteger size,
     buffer->setLabel(NS::String::string(label, UTF8StringEncoding));
   }
 
-  trackResource(buffer, category);
+  trackResource(buffer, category, label);
   return buffer;
 }
 
@@ -1738,16 +1738,17 @@ MTL::Texture *Renderer::allocateTexture(MTL::TextureDescriptor *descriptor,
     texture->setLabel(NS::String::string(label, UTF8StringEncoding));
   }
 
-  trackResource(texture, category);
+  trackResource(texture, category, label);
   return texture;
 }
 
 void Renderer::trackResource(MTL::Resource *resource,
-                             GpuMemoryTracker::Category category) {
+                             GpuMemoryTracker::Category category,
+                             const char *label) {
   if (!resource)
     return;
   size_t bytes = static_cast<size_t>(resource->allocatedSize());
-  _gpuMemoryTracker.trackResource(resource, bytes, category);
+  _gpuMemoryTracker.trackResource(resource, bytes, category, label);
 }
 
 void Renderer::releaseTrackedResource(MTL::Resource *resource) {
@@ -2526,6 +2527,13 @@ void Renderer::writeBenchmarkHeader() {
          "primitive_probabilities,"
          "object_probabilities,probabilistic_toggles,"
          "gpu_memory_mb,scratch_memory_mb,gpu_geometry_mb,gpu_textures_mb,"
+         "gpu_geom_primitive_data_mb,gpu_geom_primitive_materials_mb,"
+         "gpu_geom_primitive_indices_mb,gpu_geom_blas_nodes_mb,"
+         "gpu_geom_tlas_nodes_mb,gpu_geom_primitive_remap_mb,"
+         "gpu_geom_triangle_vertices_mb,gpu_geom_triangle_indices_mb,"
+         "gpu_geom_instance_records_mb,gpu_geom_geometry_handles_mb,"
+         "gpu_geom_active_mask_mb,gpu_geom_light_indices_mb,"
+         "gpu_geom_light_cdf_mb,gpu_geom_light_pdf_lookup_mb,"
          "gpu_restir_mb,gpu_renderer_mb,gpu_heaps_mb,gpu_staging_mb,gpu_other_mb,"
          "resident_geometry_memory_mb,strict_resident_geometry_memory_mb,"
          "resident_texture_memory_mb,residency_memory_mb,"
@@ -2543,7 +2551,21 @@ void Renderer::writeBenchmarkHeader() {
          "rayhit_prior_bias_favors_hot,"
          "lod_enter_distance,lod_exit_distance,lod_enter_view_margin,"
          "lod_exit_view_margin,energy_target_fraction,"
-         "energy_min_active,energy_visibility_boost,screen_target_fraction,"
+         "energy_min_active,energy_visibility_boost,"
+         "unified_neural_target_fraction,unified_neural_min_active,"
+         "unified_neural_toggle_budget,"
+         "unified_neural_compaction_enter_ratio,"
+         "unified_neural_compaction_exit_ratio,"
+         "unified_neural_buffer_shrink_active_ratio,"
+         "unified_neural_direct_compaction_warmup_frames,"
+         "unified_neural_direct_compaction_resident_to_geometry_ratio,"
+         "unified_neural_direct_compaction_release_ratio,"
+         "strict_resident_visibility_mode,"
+         "strict_resident_visibility_active,"
+         "strict_resident_visibility_warmup_frames,"
+         "strict_resident_visibility_min_objects,"
+         "strict_resident_visibility_min_geometry_mb,"
+         "screen_target_fraction,"
          "screen_min_pixels,screen_min_active,screen_min_pixel_skips,"
          "environment_target_fraction,"
          "environment_escape_threshold,env_high_escape,env_low_escape,global_env_escape,"
@@ -2637,6 +2659,20 @@ void Renderer::writeBenchmarkRow(const BenchmarkSample &sample) {
       << formatFixed(sample.scratchMemoryMB, 3) << ','
       << formatFixed(sample.gpuGeometryMB, 3) << ','
       << formatFixed(sample.gpuTextureMB, 3) << ','
+      << formatFixed(sample.gpuGeometryPrimitiveDataMB, 3) << ','
+      << formatFixed(sample.gpuGeometryPrimitiveMaterialsMB, 3) << ','
+      << formatFixed(sample.gpuGeometryPrimitiveIndicesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryBlasNodesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryTlasNodesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryPrimitiveRemapMB, 3) << ','
+      << formatFixed(sample.gpuGeometryTriangleVerticesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryTriangleIndicesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryInstanceRecordsMB, 3) << ','
+      << formatFixed(sample.gpuGeometryGeometryHandlesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryActiveMaskMB, 3) << ','
+      << formatFixed(sample.gpuGeometryLightIndicesMB, 3) << ','
+      << formatFixed(sample.gpuGeometryLightCdfMB, 3) << ','
+      << formatFixed(sample.gpuGeometryLightPdfLookupMB, 3) << ','
       << formatFixed(sample.gpuRestirMB, 3) << ','
       << formatFixed(sample.gpuRendererMB, 3) << ','
       << formatFixed(sample.gpuHeapsMB, 3) << ','
@@ -2680,6 +2716,30 @@ void Renderer::writeBenchmarkRow(const BenchmarkSample &sample) {
       << formatFixed(_residencyConfig.energyTargetFraction, 3) << ','
       << _residencyConfig.energyMinActivePrimitives << ','
       << formatFixed(_residencyConfig.energyVisibilityBoost, 3) << ','
+      << formatFixed(_residencyConfig.unifiedNeuralTargetFraction, 3) << ','
+      << _residencyConfig.unifiedNeuralMinActivePrimitives << ','
+      << _residencyConfig.unifiedNeuralMaxTogglesPerFrame << ','
+      << formatFixed(_residencyConfig.unifiedNeuralCompactionEnterRatio, 3)
+      << ','
+      << formatFixed(_residencyConfig.unifiedNeuralCompactionExitRatio, 3)
+      << ','
+      << formatFixed(_residencyConfig.unifiedNeuralBufferShrinkActiveRatio, 3)
+      << ','
+      << _residencyConfig.unifiedNeuralDirectCompactionWarmupFrames << ','
+      << formatFixed(
+             _residencyConfig
+                 .unifiedNeuralDirectCompactionResidentToGeometryRatio,
+             3)
+      << ','
+      << formatFixed(
+             _residencyConfig.unifiedNeuralDirectCompactionReleaseRatio, 3)
+      << ','
+      << boolToInt(_residencyConfig.strictResidentVisibility) << ','
+      << boolToInt(sample.strictResidentVisibilityActive) << ','
+      << _residencyConfig.strictResidentVisibilityWarmupFrames << ','
+      << _residencyConfig.strictResidentVisibilityMinObjects << ','
+      << formatFixed(_residencyConfig.strictResidentVisibilityMinGeometryMB, 3)
+      << ','
       << formatFixed(_residencyConfig.screenFootprintTargetFraction, 3) << ','
       << formatFixed(_residencyConfig.screenFootprintMinPixelCoverage, 3) << ','
       << _residencyConfig.screenFootprintMinActivePrimitives << ','
@@ -3014,6 +3074,8 @@ void Renderer::updateVisibleScene() {
 
   _residencyConfig = _pScene->getResidencyParameters();
   _residencyConfig.normalizeEnvironmentDepthSettings();
+  _strictResidentVisibilityActive = false;
+  _unifiedNeuralDirectCompactionActive = false;
   clearUnifiedNeuralModel();
   if (_pScene->getResidencyStrategy() == ResidencyStrategy::UnifiedNeural) {
     loadUnifiedNeuralModel(_residencyConfig.unifiedNeuralModelPath);
@@ -5217,12 +5279,46 @@ void Renderer::rebuildResidentResources(bool forceFullRebuild) {
   activeRatio = std::clamp(activeRatio, 0.0f, 1.0f);
   _lastActivePrimitiveRatio = activeRatio;
 
-  constexpr float kCompactionEnterRatio = 0.45f;
-  constexpr float kCompactionExitRatio = 0.7f;
+  constexpr float kDefaultCompactionEnterRatio = 0.45f;
+  constexpr float kDefaultCompactionExitRatio = 0.7f;
   constexpr uint32_t kCompactionCooldownFrames = 30;
+  const bool unifiedNeuralStrategy =
+      _frameStrategy == ResidencyStrategy::UnifiedNeural;
+  const float compactionEnterRatio = std::clamp(
+      unifiedNeuralStrategy
+          ? _residencyConfig.unifiedNeuralCompactionEnterRatio
+          : kDefaultCompactionEnterRatio,
+      0.0f, 1.0f);
+  const float compactionExitRatio = std::clamp(
+      unifiedNeuralStrategy
+          ? std::max(_residencyConfig.unifiedNeuralCompactionExitRatio,
+                     compactionEnterRatio)
+          : kDefaultCompactionExitRatio,
+      0.0f, 1.0f);
 
   bool alwaysResident = _frameStrategy == ResidencyStrategy::AlwaysResident;
   bool useCompaction = _residentCompacted;
+  bool directNeuralCompaction = false;
+  float residentToGeometryRatio = 1.0f;
+  if (unifiedNeuralStrategy) {
+    const size_t geometryBytes = _gpuMemoryTracker.bytesForCategory(
+        GpuMemoryTracker::Category::Geometry);
+    const size_t residentBytes = residentGeometryMemoryBytes();
+    if (geometryBytes > 0 && residentBytes > 0) {
+      residentToGeometryRatio = static_cast<float>(
+          static_cast<double>(residentBytes) /
+          static_cast<double>(geometryBytes));
+      if (_renderedFrameCount >=
+          _residencyConfig.unifiedNeuralDirectCompactionWarmupFrames) {
+        const float directCompactionRatio = std::clamp(
+            _residencyConfig
+                .unifiedNeuralDirectCompactionResidentToGeometryRatio,
+            0.0f, 1.0f);
+        directNeuralCompaction =
+            residentToGeometryRatio <= directCompactionRatio;
+      }
+    }
+  }
   if (alwaysResident) {
     useCompaction = false;
   } else if (!_residentCompacted) {
@@ -5230,7 +5326,8 @@ void Renderer::rebuildResidentResources(bool forceFullRebuild) {
         _activePrimitiveCount < totalPrimitiveCount) {
       float occupancy = static_cast<float>(_activePrimitiveCount) /
                         static_cast<float>(totalPrimitiveCount);
-      if (_activePrimitiveCount == 0 || occupancy <= kCompactionEnterRatio)
+      if (_activePrimitiveCount == 0 || occupancy <= compactionEnterRatio ||
+          directNeuralCompaction)
         useCompaction = true;
     }
   } else {
@@ -5238,10 +5335,21 @@ void Renderer::rebuildResidentResources(bool forceFullRebuild) {
                           ? static_cast<float>(_activePrimitiveCount) /
                                 static_cast<float>(totalPrimitiveCount)
                           : 1.0f;
-    if (_activePrimitiveCount == 0)
+    if (unifiedNeuralStrategy && _unifiedNeuralDirectCompactionActive) {
+      const float releaseRatio = std::clamp(
+          std::max(_residencyConfig.unifiedNeuralDirectCompactionReleaseRatio,
+                   _residencyConfig
+                       .unifiedNeuralDirectCompactionResidentToGeometryRatio),
+          0.0f, 1.0f);
+      if (residentToGeometryRatio > releaseRatio &&
+          occupancy >= compactionExitRatio)
+        useCompaction = false;
+      else
+        useCompaction = true;
+    } else if (_activePrimitiveCount == 0)
       useCompaction = true;
     else if (_activePrimitiveCount == totalPrimitiveCount ||
-             occupancy >= kCompactionExitRatio)
+             occupancy >= compactionExitRatio)
       useCompaction = false;
   }
 
@@ -5253,8 +5361,20 @@ void Renderer::rebuildResidentResources(bool forceFullRebuild) {
     _residentCompacted = useCompaction;
     _compactionCooldown = kCompactionCooldownFrames;
   }
+  if (unifiedNeuralStrategy) {
+    if (useCompaction && directNeuralCompaction)
+      _unifiedNeuralDirectCompactionActive = true;
+    else if (!useCompaction)
+      _unifiedNeuralDirectCompactionActive = false;
+  } else {
+    _unifiedNeuralDirectCompactionActive = false;
+  }
 
-  float shrinkTarget = std::clamp(_residencyConfig.bufferShrinkActiveRatio, 0.0f, 1.0f);
+  float shrinkTarget = std::clamp(
+      unifiedNeuralStrategy
+          ? _residencyConfig.unifiedNeuralBufferShrinkActiveRatio
+          : _residencyConfig.bufferShrinkActiveRatio,
+      0.0f, 1.0f);
   bool occupancyShrinkActive = _residencyConfig.enableBufferShrink &&
                                activeRatio <= shrinkTarget &&
                                totalPrimitiveCount > 0;
@@ -5962,6 +6082,43 @@ void Renderer::rebuildResidentResources(bool forceFullRebuild) {
     geometryHandles[objectIndex + 1] = handle;
   }
 
+  std::vector<bool> renderResidentObjectMask(sceneObjects.size(), false);
+  size_t strictlyResidentObjectCount = 0;
+  if (_residencyConfig.strictResidentVisibility) {
+    for (size_t objectIndex = 0; objectIndex < sceneObjects.size();
+         ++objectIndex) {
+      bool resident = false;
+      if (objectIndex < _residentObjectGpuResources.size()) {
+        const auto &gpuResident = _residentObjectGpuResources[objectIndex];
+        resident =
+            gpuResident.isResident() && objectShouldBeResident[objectIndex];
+      }
+      renderResidentObjectMask[objectIndex] = resident;
+      if (resident)
+        ++strictlyResidentObjectCount;
+    }
+  }
+
+  bool strictResidentVisibilityThisFrame = false;
+  if (_residencyConfig.strictResidentVisibility) {
+    const bool warmupSatisfied =
+        _renderedFrameCount >=
+        _residencyConfig.strictResidentVisibilityWarmupFrames;
+    const bool objectFloorSatisfied =
+        strictlyResidentObjectCount >=
+        _residencyConfig.strictResidentVisibilityMinObjects;
+    const bool geometryFloorSatisfied =
+        strictResidentGeometryMemoryMB() >=
+        _residencyConfig.strictResidentVisibilityMinGeometryMB;
+    if (_strictResidentVisibilityActive ||
+        (warmupSatisfied && objectFloorSatisfied && geometryFloorSatisfied)) {
+      _strictResidentVisibilityActive = true;
+    }
+    strictResidentVisibilityThisFrame = _strictResidentVisibilityActive;
+  } else {
+    _strictResidentVisibilityActive = false;
+  }
+
   updateTopLevelAccelerationStructure(instanceDescriptors, instancedStructures);
 
   _residentRemap = remapUpload;
@@ -6202,6 +6359,44 @@ void Renderer::rebuildResidentResources(bool forceFullRebuild) {
         static_cast<uint8_t *>(_pActiveBuffer->contents());
     if (_residencyPreviewOnly) {
       std::memset(activePtr, 1, activeBytes);
+      markBufferModified(_pActiveBuffer, NS::Range::Make(0, activeBytes));
+    } else if (strictResidentVisibilityThisFrame) {
+      if (activeMaskCount > 0)
+        std::memset(activePtr, 0, activeBytes);
+
+      if (useCompaction) {
+        for (size_t objectIndex = 0; objectIndex < sceneObjects.size();
+             ++objectIndex) {
+          if (objectIndex >= renderResidentObjectMask.size() ||
+              !renderResidentObjectMask[objectIndex])
+            continue;
+          const BlasInstanceRecord &record = _instanceRecords[objectIndex];
+          size_t first = static_cast<size_t>(record.primitiveBase);
+          size_t count = static_cast<size_t>(record.primitiveCount);
+          for (size_t local = 0; local < count && first + local < activeMaskCount;
+               ++local) {
+            activePtr[first + local] = 1;
+          }
+        }
+      } else {
+        for (size_t objectIndex = 0; objectIndex < sceneObjects.size();
+             ++objectIndex) {
+          if (objectIndex >= renderResidentObjectMask.size() ||
+              !renderResidentObjectMask[objectIndex])
+            continue;
+          const SceneObject &obj = sceneObjects[objectIndex];
+          size_t first = obj.firstPrimitive;
+          size_t last = std::min(first + obj.primitiveCount, totalPrimitiveCount);
+          for (size_t prim = first; prim < last && prim < _activePrimitive.size();
+               ++prim) {
+            if (_activePrimitive[prim])
+              activePtr[prim] = 1;
+          }
+        }
+      }
+
+      if (activeMaskCount == 0)
+        activePtr[0] = 0;
       markBufferModified(_pActiveBuffer, NS::Range::Make(0, activeBytes));
     } else if (useCompaction) {
       if (_residentPrimitiveCount > 0) {
@@ -8764,6 +8959,7 @@ void Renderer::beginFrameMetrics() {
     sample.residentTextureMemoryMB = textureResidentMB;
     sample.residencyMemoryMB =
         std::max(0.0, geometryResidentMB + textureResidentMB);
+    sample.strictResidentVisibilityActive = _strictResidentVisibilityActive;
     sample.avgHitProbability = 0.0;
     sample.p95HitProbability = 0.0;
     sample.probabilityThreshold = _residencyConfig.probabilityThreshold;
@@ -8969,6 +9165,12 @@ void Renderer::completeFrameMetrics(MTL::CommandBuffer *pCmd) {
       GpuMemoryTracker::Category::Scratch)]);
   double geometryMB = bytesToMB(memSnapshot.bytes[static_cast<size_t>(
       GpuMemoryTracker::Category::Geometry)]);
+  auto geometryLabelBytes =
+      _gpuMemoryTracker.bytesByLabelForCategory(GpuMemoryTracker::Category::Geometry);
+  auto geometryLabelMB = [&](const char *label) {
+    auto it = geometryLabelBytes.find(label ? std::string(label) : std::string());
+    return it != geometryLabelBytes.end() ? bytesToMB(it->second) : 0.0;
+  };
   double textureMB = bytesToMB(memSnapshot.bytes[static_cast<size_t>(
       GpuMemoryTracker::Category::Textures)]);
   double restirMB = restirTextureMemoryMB();
@@ -9032,6 +9234,26 @@ void Renderer::completeFrameMetrics(MTL::CommandBuffer *pCmd) {
     sample.gpuMemoryMB = totalMemoryMB;
     sample.scratchMemoryMB = scratchMB;
     sample.gpuGeometryMB = geometryMB;
+    sample.gpuGeometryPrimitiveDataMB = geometryLabelMB("PrimitiveData");
+    sample.gpuGeometryPrimitiveMaterialsMB =
+        geometryLabelMB("PrimitiveMaterials");
+    sample.gpuGeometryPrimitiveIndicesMB =
+        geometryLabelMB("PrimitiveIndices");
+    sample.gpuGeometryBlasNodesMB = geometryLabelMB("BLASNodes");
+    sample.gpuGeometryTlasNodesMB = geometryLabelMB("TLASNodes");
+    sample.gpuGeometryPrimitiveRemapMB = geometryLabelMB("PrimitiveRemap");
+    sample.gpuGeometryTriangleVerticesMB =
+        geometryLabelMB("TriangleVertices");
+    sample.gpuGeometryTriangleIndicesMB = geometryLabelMB("TriangleIndices");
+    sample.gpuGeometryInstanceRecordsMB =
+        geometryLabelMB("InstanceRecords");
+    sample.gpuGeometryGeometryHandlesMB =
+        geometryLabelMB("GeometryHandles");
+    sample.gpuGeometryActiveMaskMB = geometryLabelMB("ActiveMask");
+    sample.gpuGeometryLightIndicesMB = geometryLabelMB("LightIndices");
+    sample.gpuGeometryLightCdfMB = geometryLabelMB("LightCdf");
+    sample.gpuGeometryLightPdfLookupMB =
+        geometryLabelMB("LightPdfLookup");
     sample.gpuTextureMB = textureMB;
     sample.gpuRestirMB = restirMB;
     sample.gpuRendererMB = rendererMB;

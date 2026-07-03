@@ -3,7 +3,7 @@
 namespace NomadPathTracer {
 
 void GpuMemoryTracker::trackResource(const void *resource, size_t bytes,
-                                     Category category) {
+                                     Category category, const char *label) {
   if (!resource)
     return;
 
@@ -22,10 +22,11 @@ void GpuMemoryTracker::trackResource(const void *resource, size_t bytes,
     }
     entry.bytes = bytes;
     entry.category = category;
+    entry.label = label ? label : "";
   } else {
     if (bytes == 0)
       return;
-    _entries.emplace(resource, Entry{bytes, category});
+    _entries.emplace(resource, Entry{bytes, category, label ? label : ""});
   }
 
   size_t newIndex = static_cast<size_t>(category);
@@ -62,6 +63,19 @@ GpuMemoryTracker::Snapshot GpuMemoryTracker::snapshot() const {
 size_t GpuMemoryTracker::bytesForCategory(Category category) const {
   std::lock_guard<std::mutex> lock(_mutex);
   return _totals[static_cast<size_t>(category)];
+}
+
+std::unordered_map<std::string, size_t>
+GpuMemoryTracker::bytesByLabelForCategory(Category category) const {
+  std::lock_guard<std::mutex> lock(_mutex);
+  std::unordered_map<std::string, size_t> totals;
+  for (const auto &entryPair : _entries) {
+    const Entry &entry = entryPair.second;
+    if (entry.category != category)
+      continue;
+    totals[entry.label] += entry.bytes;
+  }
+  return totals;
 }
 
 } // namespace NomadPathTracer

@@ -228,7 +228,8 @@ private:
                                 GpuMemoryTracker::Category category,
                                 const char *label = nullptr);
   void trackResource(MTL::Resource *resource,
-                     GpuMemoryTracker::Category category);
+                     GpuMemoryTracker::Category category,
+                     const char *label = nullptr);
   void releaseTrackedResource(MTL::Resource *resource);
   GpuMemoryTracker::Category textureCategoryForSlot(
       const ManagedTextureSlot &slot) const;
@@ -544,6 +545,20 @@ private:
     double gpuMemoryMB = 0.0;
     double scratchMemoryMB = 0.0;
     double gpuGeometryMB = 0.0;
+    double gpuGeometryPrimitiveDataMB = 0.0;
+    double gpuGeometryPrimitiveMaterialsMB = 0.0;
+    double gpuGeometryPrimitiveIndicesMB = 0.0;
+    double gpuGeometryBlasNodesMB = 0.0;
+    double gpuGeometryTlasNodesMB = 0.0;
+    double gpuGeometryPrimitiveRemapMB = 0.0;
+    double gpuGeometryTriangleVerticesMB = 0.0;
+    double gpuGeometryTriangleIndicesMB = 0.0;
+    double gpuGeometryInstanceRecordsMB = 0.0;
+    double gpuGeometryGeometryHandlesMB = 0.0;
+    double gpuGeometryActiveMaskMB = 0.0;
+    double gpuGeometryLightIndicesMB = 0.0;
+    double gpuGeometryLightCdfMB = 0.0;
+    double gpuGeometryLightPdfLookupMB = 0.0;
     double gpuTextureMB = 0.0;
     double gpuRestirMB = 0.0;
     double gpuRendererMB = 0.0;
@@ -554,6 +569,7 @@ private:
     double strictResidentGeometryMemoryMB = 0.0;
     double residentTextureMemoryMB = 0.0;
     double residencyMemoryMB = 0.0;
+    bool strictResidentVisibilityActive = false;
     double textureMemoryCapMB = 0.0;
     double geometryMemoryCapMB = 0.0;
     double totalMemoryCapMB = 0.0;
@@ -914,6 +930,8 @@ private:
   std::string _unifiedNeuralScoreFilePath;
   std::string _runOutputRoot;
   std::string _sceneVariantName;
+  bool _strictResidentVisibilityActive = false;
+  bool _unifiedNeuralDirectCompactionActive = false;
   size_t _neuralClipLength = 16;
   size_t _neuralClipStartFrame = 0;
   size_t _forcedObjectOffIndex = std::numeric_limits<size_t>::max();

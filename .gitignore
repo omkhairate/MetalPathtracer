@@ -28,12 +28,21 @@ xcuserdata/
 
 # Local benchmark outputs
 Benchmarks/**/*.exr
+Benchmarks/**/*.mkv
+Benchmarks/**/*.png
+Benchmarks/**/*.json
 Benchmarks/**/*.mp4
 Benchmarks/**/*_comparison.png
 Benchmarks/**/*.log
 Benchmarks/**/metrics_*.csv
+Benchmarks/**/gpu_mem.csv
+Benchmarks/**/perf.csv
+Benchmarks/**/run_summary.json
 Benchmarks/**/plots/
 Benchmarks/metrics_*.csv
+Benchmarks/aligned_*.csv
+Benchmarks/aligned_*.json
+Benchmarks/aligned_*.png
 Benchmarks/videos/
 Benchmarks/run*/
 
@@ -44,6 +53,12 @@ Benchmarks/cgvqm/media/
 Benchmarks/cgvqm/weights/
 Benchmarks/cgvqm/__pycache__/
 Benchmarks/cgvqm/
+
+# Renderer-local benchmark dumps
+Nomad Path Tracer/Benchmarks/
+
+# Alternate local build folders
+build_*/
 
 # Root-level generated analysis images
 flip.frame_*.png

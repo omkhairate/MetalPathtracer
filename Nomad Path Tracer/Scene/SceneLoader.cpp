@@ -485,6 +485,50 @@ bool SceneLoader::LoadSceneFromXML(const std::string& path, Scene* scene) {
     }
     params.unifiedNeuralBlendWeight = root->FloatAttribute(
         "unifiedNeuralBlendWeight", params.unifiedNeuralBlendWeight);
+    params.unifiedNeuralTargetFraction = root->FloatAttribute(
+        "unifiedNeuralTargetFraction", params.unifiedNeuralTargetFraction);
+    params.unifiedNeuralMinActivePrimitives =
+        static_cast<size_t>(root->Unsigned64Attribute(
+            "unifiedNeuralMinActive",
+            static_cast<uint64_t>(params.unifiedNeuralMinActivePrimitives)));
+    params.unifiedNeuralMaxTogglesPerFrame =
+        static_cast<size_t>(root->Unsigned64Attribute(
+            "unifiedNeuralToggleBudget",
+            static_cast<uint64_t>(params.unifiedNeuralMaxTogglesPerFrame)));
+    params.unifiedNeuralCompactionEnterRatio = root->FloatAttribute(
+        "unifiedNeuralCompactionEnterRatio",
+        params.unifiedNeuralCompactionEnterRatio);
+    params.unifiedNeuralCompactionExitRatio = root->FloatAttribute(
+        "unifiedNeuralCompactionExitRatio",
+        params.unifiedNeuralCompactionExitRatio);
+    params.unifiedNeuralBufferShrinkActiveRatio = root->FloatAttribute(
+        "unifiedNeuralBufferShrinkActiveRatio",
+        params.unifiedNeuralBufferShrinkActiveRatio);
+    params.unifiedNeuralDirectCompactionWarmupFrames =
+        root->UnsignedAttribute(
+            "unifiedNeuralDirectCompactionWarmupFrames",
+            params.unifiedNeuralDirectCompactionWarmupFrames);
+    params.unifiedNeuralDirectCompactionResidentToGeometryRatio =
+        root->FloatAttribute(
+            "unifiedNeuralDirectCompactionResidentToGeometryRatio",
+            params.unifiedNeuralDirectCompactionResidentToGeometryRatio);
+    params.unifiedNeuralDirectCompactionReleaseRatio =
+        root->FloatAttribute(
+            "unifiedNeuralDirectCompactionReleaseRatio",
+            params.unifiedNeuralDirectCompactionReleaseRatio);
+    params.strictResidentVisibility = root->BoolAttribute(
+        "strictResidentVisibility", params.strictResidentVisibility);
+    params.strictResidentVisibilityWarmupFrames = root->UnsignedAttribute(
+        "strictResidentVisibilityWarmupFrames",
+        params.strictResidentVisibilityWarmupFrames);
+    params.strictResidentVisibilityMinObjects =
+        static_cast<size_t>(root->Unsigned64Attribute(
+            "strictResidentVisibilityMinObjects",
+            static_cast<uint64_t>(
+                params.strictResidentVisibilityMinObjects)));
+    params.strictResidentVisibilityMinGeometryMB = root->FloatAttribute(
+        "strictResidentVisibilityMinGeometryMB",
+        params.strictResidentVisibilityMinGeometryMB);
 
     params.rayHitDecay = root->FloatAttribute("rayHitDecay", params.rayHitDecay);
     params.rayHitTargetFraction =

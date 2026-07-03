@@ -73,6 +73,25 @@ struct ResidencyParameters {
   std::string unifiedNeuralModelPath;
   std::string unifiedNeuralMode = "blend";
   float unifiedNeuralBlendWeight = 0.5f;
+  // UnifiedNeural needs its own target fraction so it can drive compaction
+  // without changing the heuristic unified / energy behavior.
+  float unifiedNeuralTargetFraction = 0.42f;
+  size_t unifiedNeuralMinActivePrimitives = 16;
+  size_t unifiedNeuralMaxTogglesPerFrame = 256;
+  float unifiedNeuralCompactionEnterRatio = 0.55f;
+  float unifiedNeuralCompactionExitRatio = 0.72f;
+  float unifiedNeuralBufferShrinkActiveRatio = 0.45f;
+  uint32_t unifiedNeuralDirectCompactionWarmupFrames = 12;
+  float unifiedNeuralDirectCompactionResidentToGeometryRatio = 0.18f;
+  float unifiedNeuralDirectCompactionReleaseRatio = 0.30f;
+  // Experimental mode for study clarity: only objects that are truly resident
+  // are allowed to contribute to rendering.
+  bool strictResidentVisibility = false;
+  // To avoid blank startup frames in strict mode, only arm resident-only
+  // visibility after a minimal truly resident set has been established.
+  uint32_t strictResidentVisibilityWarmupFrames = 8;
+  size_t strictResidentVisibilityMinObjects = 32;
+  float strictResidentVisibilityMinGeometryMB = 32.0f;
 
   float rayHitDecay = 0.85f;
   float rayHitTargetFraction = 0.54f;

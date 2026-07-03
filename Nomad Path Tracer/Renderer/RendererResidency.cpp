@@ -2341,16 +2341,28 @@ bool Renderer::updateUnifiedResidency(bool forceAllToggles) {
       clampUnit(static_cast<float>(std::min(_frameCameraMotionMetric, 1.0)));
   const double totalCapMB = effectiveTotalGpuMemoryCapMB();
   const double gpuMB = currentGPUMemoryMB();
+  const bool unifiedNeuralStrategy =
+      _frameStrategy == ResidencyStrategy::UnifiedNeural;
   const float memoryPressure =
       (totalCapMB > 0.0)
           ? clampUnit(static_cast<float>((gpuMB / totalCapMB - 0.79) / 0.21))
           : 0.0f;
+  const float baseUnifiedTargetFraction =
+      unifiedNeuralStrategy ? _residencyConfig.unifiedNeuralTargetFraction
+                            : _residencyConfig.energyTargetFraction;
+  const float minUnifiedTargetFraction =
+      unifiedNeuralStrategy ? 0.28f : 0.55f;
+  const float maxUnifiedTargetFraction =
+      unifiedNeuralStrategy ? 0.92f : 0.96f;
   const float adaptiveUnifiedTargetFraction =
-      std::clamp(_residencyConfig.energyTargetFraction + 0.06f * cameraMotion -
+      std::clamp(baseUnifiedTargetFraction + 0.06f * cameraMotion -
                      0.12f * memoryPressure,
-                 0.55f, 0.96f);
+                 minUnifiedTargetFraction, maxUnifiedTargetFraction);
   const size_t baseUnifiedToggleBudget =
-      std::max<size_t>(_residencyConfig.energyMaxTogglesPerFrame, 1);
+      std::max<size_t>(unifiedNeuralStrategy
+                           ? _residencyConfig.unifiedNeuralMaxTogglesPerFrame
+                           : _residencyConfig.energyMaxTogglesPerFrame,
+                       1);
   const size_t adaptiveUnifiedToggleBudget = std::max<size_t>(
       1, static_cast<size_t>(std::llround(
              static_cast<double>(baseUnifiedToggleBudget) *
@@ -2359,7 +2371,10 @@ bool Renderer::updateUnifiedResidency(bool forceAllToggles) {
 
   const size_t primCount = _activePrimitive.size();
   const size_t minActivePrimitives =
-      std::min(primCount, _residencyConfig.energyMinActivePrimitives);
+      std::min(primCount,
+               unifiedNeuralStrategy
+                   ? _residencyConfig.unifiedNeuralMinActivePrimitives
+                   : _residencyConfig.energyMinActivePrimitives);
   size_t targetResidentPrimitives = static_cast<size_t>(std::ceil(
       static_cast<double>(primCount) *
       static_cast<double>(adaptiveUnifiedTargetFraction)));
