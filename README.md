@@ -258,15 +258,34 @@ The label pipeline uses a strict `AlwaysResident` reference rather than an exist
 
 ```mermaid
 flowchart LR
-    A["AlwaysResident feature run"] --> B["Clip-level object features"]
-    B --> C["Ablation manifest selection"]
-    C --> D["One-object-off ablation runs"]
-    D --> E["EXR capture"]
-    E --> F["Deferred denoise"]
-    F --> G["Video encoding"]
-    G --> H["CGVQM scoring"]
-    H --> I["Training labels CSV"]
+    A["Shared benchmark scene and memory budget"] --> B["Heuristic residency sweeps"]
+    A --> C["AlwaysResident feature/reference capture"]
+
+    B --> D["Runtime metrics and behavior analysis"]
+
+    C --> E["Clip-level object features"]
+    E --> F["Ablation manifest selection"]
+    F --> G["AlwaysResident plus object-off ablation runs"]
+    G --> H["EXR capture, deferred denoise, and video encoding"]
+    H --> I["CGVQM quality deltas"]
+    I --> J["Training labels CSV"]
+
+    E --> K["Teacher signal features"]
+    J --> L["Direct CGVQM supervision"]
+    K --> M["Teacher-student or residual supervision"]
+
+    L --> N["Train compact linear or MLP models"]
+    M --> N
+    N --> O["Export runtime model JSON"]
+    O --> P["UnifiedNeural runtime integration"]
+    P --> Q["Path-wise evaluation vs AlwaysResident references"]
+    D --> Q
 ```
+
+In short, the repository now supports two tightly connected research loops:
+
+- a heuristic-comparison loop for understanding memory, timing, churn, and compaction tradeoffs under one shared budget
+- a learned-policy loop where `AlwaysResident` references, object ablations, CGVQM, and teacher signals are used to train compact `UnifiedNeural` runtime models
 
 ### Main scripts
 
